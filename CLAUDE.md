@@ -77,6 +77,7 @@ Four, no more. Each has a fixed file scope and explicit non-goals in its definit
 
 Load on demand, by name. Do not preload; do not inline their contents here.
 
+- `game-design` — how to be a design partner: interview first, options not answers, push back.
 - `godot-conventions` — GDScript style, node naming, scene organisation, signals, resources.
 - `asset-import` — import settings per asset type, naming, directory layout, manifest format.
 - `state-files` — exact format and update rules for the four state files.

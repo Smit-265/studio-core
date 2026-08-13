@@ -16,7 +16,11 @@ packets in it is waste; if the queue is non-empty, stop and say so.
 ## Read before starting
 
 1. `PROGRESS.md` — current milestone, and whether a queue already exists.
-2. `GAME_PLAN.md` — the milestone's goal and exit criteria, and the non-goals list.
+2. `GAME_PLAN.md` §6 — **the only source of milestones.** Take the milestone's goal and exit
+   criteria from here and nowhere else; its exit criteria become packet acceptance criteria
+   close to verbatim. §7 non-goals bound what may be planned. If §6 is empty, or the milestone's
+   exit criteria are not checkable as written, stop: the milestone needs `/design-milestone`,
+   not a planner guessing at it.
 3. `DECISIONS.md` — §1 approved tools, §2 approved asset sources, §5 architecture decisions.
 4. The `state-files` skill — the task packet shape is not optional.
 

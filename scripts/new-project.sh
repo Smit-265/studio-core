@@ -193,11 +193,19 @@ sc_section "next"
 cat <<EOF
   $TARGET
 
-  1. Fill in GAME_PLAN.md   - vision, scope, milestones, non-goals
-  2. Fill in DECISIONS.md   - engine version, approved tools and asset sources
-                              (D-001 is already recorded for you)
-  3. Verify the scaffold:   $STUDIO_CORE/scripts/verify.sh "$TARGET"
-  4. Plan the first milestone, then work one task at a time.
+  next step:  cd "$TARGET" && run /design-game
+
+  GAME_PLAN.md is scaffolded with its sections present and empty. /design-game
+  fills them in with you, one section at a time - pitch, core loop, art
+  direction, world structure, scope, non-goals. Then:
+
+  1. /design-milestone      - work out the first vertical slice
+  2. /plan-milestone        - decompose it into task packets
+  3. /next-task             - execute one packet at a time
+  4. Verify any time:       $STUDIO_CORE/scripts/verify.sh "$TARGET"
+
+  DECISIONS.md already carries D-001 to D-003. Add approved tools and asset
+  sources there before the asset-pipeline needs them.
 
   studio-core resolves as $SC_PATH_NOTE from this repo.
 EOF

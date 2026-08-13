@@ -30,8 +30,9 @@ studio-core/
 ├── README.md
 ├── .claude/
 │   ├── agents/               # planner, builder, reviewer, asset-pipeline
-│   ├── commands/             # plan-milestone, next-task, verify, session-end
-│   └── skills/               # godot-conventions, asset-import, state-files
+│   ├── commands/             # design-game, design-milestone, plan-milestone,
+│   │                         # next-task, verify, session-end
+│   └── skills/               # game-design, godot-conventions, asset-import, state-files
 ├── config/
 │   └── budgets.yaml          # default asset thresholds; games override per-repo
 ├── scripts/                  # verify.sh, new-project.sh, check-budgets.py,
@@ -64,11 +65,16 @@ the four state files ready to fill.
 
 Then, in the new repo:
 
-1. Fill in `GAME_PLAN.md` — vision, scope, milestones, and explicit non-goals.
-2. Fill in `DECISIONS.md` — engine version, approved tools, approved asset sources, style
-   constraints. Agents treat this as settled; anything absent triggers an escalation to you.
-3. Run `/plan-milestone` to turn the first milestone into a task queue.
-4. Run `/next-task` to execute one task at a time.
+1. `/design-game` — design the game with the agent as a partner, not a scribe. It interviews
+   before proposing, offers options with tradeoffs rather than single answers, pushes back on
+   scope, and writes `GAME_PLAN.md` one section at a time, only once you confirm each.
+2. `/design-milestone` — work out the first vertical slice and append it to the plan.
+3. `/plan-milestone` — decompose that milestone into task packets.
+4. `/next-task` — execute one packet at a time.
+
+Design runs in the main thread rather than as an agent, because it is a conversation and
+subagents cannot converse. Fill in `DECISIONS.md` as tool and asset-source choices come up;
+agents treat it as settled and escalate on anything absent.
 
 ## The four state files
 
