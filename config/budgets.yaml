@@ -101,6 +101,8 @@ textures:
     metallic: ["_metal", "_mtl"]
     ao: ["_ao", "_occlusion"]
     emission: ["_emit", "_emission"]
+    ui: ["_ui", "_icon", "_hud"]
+    skybox: ["_sky", "_skybox", "_hdri", "_panorama"]
 
 # ---------------------------------------------------------------------------
 # files — maximum size on disk, in megabytes, by asset type. Type comes from

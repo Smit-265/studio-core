@@ -36,6 +36,7 @@ studio-core/
 │   └── budgets.yaml          # default asset thresholds; games override per-repo
 ├── scripts/                  # verify.sh, new-project.sh, check-budgets.py,
 │                             # check-licences.py, gen-manifest.py, session-report.sh
+│                             # _resolve.sh, _sclib.py — sourced/imported, not run
 ├── templates/                # state files, assets.yaml, budgets override, game CLAUDE.md
 └── .github/workflows/        # verify.yml, build.yml
 ```
@@ -122,7 +123,29 @@ No more will be added.
 MCP servers are never installed by an agent. `DECISIONS.md` may list candidates as
 recommendations; installing one is a human decision.
 
-Model policy: Sonnet by default, Opus reserved for architecture decisions and hard debugging.
+### Model policy — a human operating rule
+
+**Sonnet by default. Opus only for architecture decisions and hard debugging.**
+
+This one is on you, not on the agent. Model selection happens at invocation, so an instruction
+inside `CLAUDE.md` cannot act on it — by the time the model reads the rule, the choice is
+already made and already billed. It is therefore stated here and encoded as the declared model
+in each agent definition, not carried as a runtime rule.
+
+### Finding studio-core from a game repo
+
+Game repo scripts locate this repo in a fixed order:
+
+1. `$STUDIO_CORE`, if set — the escape hatch for non-standard layouts. `.env.example` in every
+   scaffolded game repo shows the variable.
+2. `../studio-core` — the sibling-directory convention. `new-project.sh` scaffolds game repos
+   as siblings of studio-core so this works with no configuration.
+3. Otherwise: fail with a message naming both.
+
+Games track studio-core's head; there is no version pinning. The accepted consequence is that a
+studio-core change can break an existing game repo — `verify.sh` is what catches it. Once a
+game ships, pin it by converting studio-core to a git submodule in that repo; the resolution
+order above already accommodates a submodule path via `$STUDIO_CORE`.
 
 ## Build status
 

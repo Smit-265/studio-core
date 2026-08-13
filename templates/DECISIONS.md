@@ -76,13 +76,28 @@ table records the *decision*; the config records the *threshold*. Keep them in a
 
 Newest last. One entry per decision. Keep each under ten lines — this file is read often.
 
-### D-001 — {{title}}
+### D-001 — studio-core is resolved by convention, not pinned
 
-- **Date:** {{date}}
-- **Decision:** {{what was decided, one or two sentences}}
-- **Rationale:** {{why — the reason that will not be obvious in six months}}
-- **Alternatives rejected:** {{option}} because {{reason}}
-- **Consequences:** {{what this now commits us to}}
+- **Date:** {{DATE}}
+- **Decision:** This repo locates studio-core at `$STUDIO_CORE` if set, else the sibling
+  directory `../studio-core`, else it fails with a message naming both. `scripts/_resolve.sh`
+  in studio-core implements this; no script hardcodes a path or assumes cwd. This game tracks
+  studio-core's head — no version pin.
+- **Rationale:** A two-person studio running several games needs harness fixes to reach every
+  game without a per-repo migration. Pinning gives reproducibility but guarantees drift: each
+  game ends up on a different harness version and every improvement becomes N migrations.
+  Tracking head inverts that — one harness, and breakage surfaces immediately rather than at
+  the next upgrade.
+- **Alternatives rejected:** *git submodule* because pinning is the wrong default before a
+  game ships — it turns every harness fix into a submodule bump per repo. *Vendoring/copying
+  scripts* because it forks the harness on day one. *Installing studio-core as a package*
+  because it adds a build step and a registry to a two-person studio.
+- **Consequences:** A studio-core change can break this repo without warning. `verify.sh` is
+  what catches it, so it runs in CI on push and PR, and a red build after a harness change is
+  the expected signal, not a surprise. **Migration path: once this game ships, pin it** —
+  convert studio-core to a git submodule here and point `$STUDIO_CORE` at the submodule path.
+  A shipped game must be rebuildable at its shipped state; an in-development one benefits more
+  from tracking head. Record that switch as its own decision when it happens.
 - **Status:** active
 
 ### D-002 — {{title}}

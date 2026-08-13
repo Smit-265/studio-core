@@ -22,9 +22,11 @@ The rules below are not preferences.
    stay inside it. Touching files outside scope is scope creep — stop and report instead.
 4. **Cheap reads.** Prefer state files, `git diff`, and script output over reading source.
    Read whole files only when you are about to change them.
-5. **Sonnet by default.** Opus is for architecture decisions and hard debugging only.
-6. **No re-litigating.** Decisions recorded in `DECISIONS.md` are settled. Follow them or
+5. **No re-litigating.** Decisions recorded in `DECISIONS.md` are settled. Follow them or
    escalate to the human; do not quietly pick something else.
+6. **Two-strike rule.** If `verify.sh` fails, you get at most two fix attempts. On the second
+   failure, stop and report with the error output. Do not keep iterating — a loop on a failing
+   gate is the most expensive thing you can do.
 7. **This file is capped at 200 lines.** Anything longer belongs in a skill. No exceptions.
 
 ## State
@@ -39,8 +41,11 @@ State lives in the game repo, not here. Four files:
 | `assets.yaml` | Asset provenance: path, source, author, SPDX licence, date | On asset add |
 
 `ASSET_MANIFEST.md` is a **generated** view of `assets.yaml` — never hand-edit it; append to
-`assets.yaml` and run `gen-manifest.py`. Budget thresholds live in `config/budgets.yaml`, not
-in any script.
+`assets.yaml` and run `gen-manifest.py`. Budget thresholds live in `config/budgets.yaml`, never
+in a script: studio-core's copy holds the defaults, the game repo's copy holds only that
+game's overrides, and the game's values win on merge.
+
+studio-core itself is found via `$STUDIO_CORE`, else the sibling directory `../studio-core`.
 
 **Read state before acting.** At session start, read `PROGRESS.md` first, then `DECISIONS.md`
 if the task involves tool or architecture choices. Reconstruct context from these files and

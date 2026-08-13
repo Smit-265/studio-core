@@ -1,8 +1,14 @@
 # {{GAME_NAME}}
 
 Game repo. The harness — agents, skills, commands, verification scripts — lives in
-**studio-core** at `{{STUDIO_CORE_PATH}}`. This file stays thin and does not duplicate it.
-Read studio-core's `CLAUDE.md` for the operating rules; they apply here in full.
+**studio-core**. This file stays thin and does not duplicate it. Read studio-core's
+`CLAUDE.md` for the operating rules; they apply here in full.
+
+**Finding studio-core:** `$STUDIO_CORE` if set, else `../studio-core`, else the scripts fail
+with a message naming both. At scaffold time it was `{{STUDIO_CORE_PATH}}`. See `.env.example`
+to set the variable, and `DECISIONS.md` D-001 for why it is a convention rather than a pin.
+This repo tracks studio-core's head — a harness change can break it, and `verify.sh` is what
+catches that.
 
 **Same 200-line cap applies to this file.** Game detail belongs in the state files below,
 which load only when needed, not here, which ships with every request.

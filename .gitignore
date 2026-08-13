@@ -1,0 +1,10 @@
+# python
+__pycache__/
+*.py[cod]
+
+# local environment
+.env
+.studio/
+
+# scratch
+*.log

@@ -9,10 +9,10 @@
 
 Human-readable view of `assets.yaml`. Provenance and licensing for every asset that ships.
 
-**Generated:** {{TIMESTAMP}} from `assets.yaml` (schema v{{SCHEMA_VERSION}}) · **Assets:** {{n}} · **Rejected:** {{m}}
+**Source:** `assets.yaml` (schema v1) · **Fingerprint:** `dbd64c8d6f0d` · **Assets:** 0 · **Rejected:** 0
 
 Licence coverage is a ship-blocker. `check-licences.py` reads `assets.yaml`, walks
-`{{ASSET_ROOT}}`, and fails on any file without an entry or any entry without a licence.
+`assets/`, and fails on any file without an entry or any entry without a licence.
 
 ---
 
@@ -36,8 +36,7 @@ Assets altered after acquisition. Some licences require stating that changes wer
 
 ## 3. Attribution text
 
-Copy verbatim into in-game credits and any store page. Generated from every entry with
-`attribution_required: true`.
+Copy verbatim into in-game credits and any store page. Generated from every entry with `attribution_required: true`.
 
 ```
 (no attribution-required assets)

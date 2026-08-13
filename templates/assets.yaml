@@ -33,6 +33,9 @@ ignore:
   - "**/*.import"       # engine-generated import metadata
   - "**/.gdignore"
   - "**/README.md"
+  - "**/.gitkeep"       # keeps empty asset dirs in git; not an asset
+  - "**/.DS_Store"
+  - "**/Thumbs.db"
 
 # ---------------------------------------------------------------------------
 # assets — one entry per shipping file.
