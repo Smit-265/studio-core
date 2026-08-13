@@ -4,8 +4,8 @@
 > session ends.** A session that ends without updating this file has wasted its tokens,
 > because the next one cannot resume cheaply.
 >
-> Written by: planner (rewrites the queue), builder (moves one task through the queue).
-> Format rules: `state-files` skill.
+> Written by: planner (rewrites the queue), builder (moves one packet through it).
+> Exact rules: `state-files` skill. Do not freehand prose where a packet belongs.
 
 **Last updated:** {{DATE}} · **Updated by:** {{agent or human}}
 
@@ -21,53 +21,71 @@ Progress: {{n}}/{{total}} tasks done.
 
 ## In progress
 
-Exactly one task, or "none". If a task is here at session start, resume it rather than
-pulling a new one.
+Exactly one task packet, or the word `none`. Same shape as a queue entry — a packet moves
+between sections unchanged except for `base_sha` and `attempts`. If a packet is here at
+session start, resume it rather than pulling a new one.
 
-```
 none
+
+<!-- When active, the section holds one packet in exactly this shape:
+
+```yaml
+id: T-007
+goal: Add a pause menu that suspends the game tree.
+scope:
+  - scenes/ui/pause_menu.tscn
+  - scripts/ui/pause_menu.gd
+acceptance:
+  - Pressing ui_cancel toggles the menu and sets get_tree().paused
+  - verify.sh exits 0
+tools: []
+base_sha: 4f2a1c9e8b7d6a5c4b3a2918f7e6d5c4b3a29187
+attempts: 1
 ```
-
-<!-- When active, use this shape:
-
-### T-007 — {{title}}
-- **Scope:** `path/one.gd`, `path/two.tscn`   (files this task may touch — nothing else)
-- **Started:** {{date}}
-- **State:** {{what is done, what remains — enough for a cold session to continue}}
-- **Next step:** {{the single next action}}
 -->
 
 ---
 
 ## Task queue
 
-Ordered. Top of the list is next. Each task names its file scope, its acceptance criteria, and
-the tool or asset source it uses — drawn only from the approved list in `DECISIONS.md`.
+Ordered; the top packet is next. Every entry is a task packet — the same shape the builder
+consumes, with `base_sha: ""` and `attempts: 0` until a builder picks it up. A task that will
+not fit this shape was decomposed badly; say so rather than writing prose instead.
 
-### T-001 — {{title}}
+```yaml
+id: T-001
+goal: {{one sentence — what is true when this is done}}
+scope:
+  - {{path/that/may/be/touched}}
+acceptance:
+  - {{observable outcome a script or a human can check}}
+  - verify.sh exits 0
+tools: []
+base_sha: ""
+attempts: 0
+```
 
-- **Scope:** `{{path}}`
-- **Tool/source:** {{from DECISIONS.md, or "none"}}
-- **Acceptance:**
-  - [ ] {{checkable outcome}}
-  - [ ] `verify.sh` exits 0
-
-### T-002 — {{title}}
-
-- **Scope:** `{{path}}`
-- **Tool/source:** {{…}}
-- **Acceptance:**
-  - [ ] {{…}}
-  - [ ] `verify.sh` exits 0
+```yaml
+id: T-002
+goal: {{one sentence}}
+scope:
+  - {{path}}
+acceptance:
+  - {{outcome}}
+  - verify.sh exits 0
+tools: []
+base_sha: ""
+attempts: 0
+```
 
 ---
 
 ## Completed
 
-Newest first. One line each — enough to know it happened, not enough to cost tokens re-reading.
-Detail lives in git history; use `scripts/session-report.sh` to recover it when needed.
+Newest first. One line each — enough to know it happened, not enough to cost tokens
+re-reading. Detail lives in git history; `scripts/session-report.sh` recovers it when needed.
 
-| Task | Title | Done | Commit |
+| Task | Goal | Done | Commit |
 |---|---|---|---|
 | T-000 | {{example — delete this row}} | {{date}} | `{{sha}}` |
 
@@ -86,7 +104,7 @@ session opens with the question rather than rediscovering it.
 
 ## Notes for next session
 
-Free text, short. Things a cold session cannot infer from the tables above. Clear this out
-once acted upon — stale notes cost tokens on every read.
+Free text, short. Things a cold session cannot infer from the packets and tables above. Clear
+these out once acted upon — stale notes cost tokens on every read.
 
 - {{note}}

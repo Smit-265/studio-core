@@ -26,7 +26,8 @@ The rules below are not preferences.
    escalate to the human; do not quietly pick something else.
 6. **Two-strike rule.** If `verify.sh` fails, you get at most two fix attempts. On the second
    failure, stop and report with the error output. Do not keep iterating — a loop on a failing
-   gate is the most expensive thing you can do.
+   gate is the most expensive thing you can do. The count lives in the task packet's `attempts`
+   field, so it survives a session boundary; arriving at `attempts: 2` means stop, not restart.
 7. **This file is capped at 200 lines.** Anything longer belongs in a skill. No exceptions.
 
 ## State
@@ -46,6 +47,11 @@ in a script: studio-core's copy holds the defaults, the game repo's copy holds o
 game's overrides, and the game's values win on merge.
 
 studio-core itself is found via `$STUDIO_CORE`, else the sibling directory `../studio-core`.
+
+Work is carried in **task packets** — one YAML shape, written by planner and consumed by
+builder, identical in the queue and in the in-progress slot. Fields: `id`, `goal`, `scope`,
+`acceptance`, `tools`, `base_sha`, `attempts`. Work that will not fit the shape was decomposed
+badly; say so rather than writing prose instead. Full rules: `state-files` skill.
 
 **Read state before acting.** At session start, read `PROGRESS.md` first, then `DECISIONS.md`
 if the task involves tool or architecture choices. Reconstruct context from these files and

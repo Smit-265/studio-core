@@ -18,7 +18,7 @@ judgement call.
 
 | Tool / dependency | Version | Used for | Approved |
 |---|---|---|---|
-| {{engine}} | {{version}} | Engine | {{date}} |
+| Godot | 4.7.1.stable | Engine | {{DATE}} |
 | | | | |
 
 ---
@@ -100,7 +100,25 @@ Newest last. One entry per decision. Keep each under ten lines — this file is 
   from tracking head. Record that switch as its own decision when it happens.
 - **Status:** active
 
-### D-002 — {{title}}
+### D-002 — Godot is pinned to 4.7.1.stable
+
+- **Date:** {{DATE}}
+- **Decision:** This project targets **Godot 4.7.1.stable**, not "4.x". `project.godot` declares
+  it in `config/features`, and the `godot-conventions` skill is written against this version.
+  Changing minor version is a decision, recorded here as a superseding entry.
+- **Rationale:** "4.x" is not a version — GDScript syntax, import defaults and node APIs move
+  between minors, so conventions written against a range are written against nothing. A pin
+  also means `verify.sh` failures are attributable to the change under test rather than to an
+  engine that drifted underneath the project.
+- **Alternatives rejected:** *Tracking latest stable* because an engine upgrade landing
+  mid-milestone turns every failure into a bisect. *Pinning to a patch-exact build in CI only*
+  because the two-person studio develops locally and would hit the drift first.
+- **Consequences:** Upgrading is deliberate work: bump the pin, run `verify.sh`, fix what
+  breaks, append a superseding decision. Contributors install this exact version; `GODOT_BIN`
+  in `.env` points at it when several are installed side by side.
+- **Status:** active
+
+### D-003 — {{title}}
 
 - **Date:**
 - **Decision:**
