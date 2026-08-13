@@ -174,6 +174,9 @@ fi
 # ---------------------------------------------------------------------------
 sc_require_python
 
+sc_section "loaders"
+$SC_PYTHON "$SC_SCRIPTS/check-loaders.py" "$PROJECT" || step_failed
+
 sc_section "manifest"
 if [ -f "$PROJECT/assets.yaml" ]; then
   if $SC_PYTHON "$SC_SCRIPTS/gen-manifest.py" "$PROJECT" --check; then

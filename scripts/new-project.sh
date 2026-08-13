@@ -151,6 +151,12 @@ sc_require_python
 $SC_PYTHON "$SC_SCRIPTS/gen-manifest.py" "$TARGET" --name "game-$NAME" >/dev/null \
   && sc_ok "ASSET_MANIFEST.md generated from assets.yaml"
 
+# Loaders, not copies: each file points back at the definition in studio-core so
+# the harness stays single-sourced, while agents still run rooted in this repo.
+# See DECISIONS.md D-003.
+$SC_PYTHON "$SC_SCRIPTS/check-loaders.py" "$TARGET" --write >/dev/null \
+  && sc_ok ".claude/ loaders generated from studio-core"
+
 if [ "$DO_GIT" -eq 1 ] && sc_have git; then
   (
     cd "$TARGET" || exit 1

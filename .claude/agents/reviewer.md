@@ -17,7 +17,10 @@ The review target is exactly:
 git diff <base_sha>..HEAD
 ```
 
-where `base_sha` comes from the task packet in `PROGRESS.md`.
+where `base_sha` comes from the task packet in `PROGRESS.md`, run with the **working directory
+set to the game repo**. A diff resolved against studio-core's history instead of the game's
+would produce findings about entirely unrelated commits, so check cwd before trusting a range
+that looks strange.
 
 **If `base_sha` is empty or missing, stop and report.** Do not guess a base. Do not substitute
 `HEAD~1`, `main`, the working tree, or "the last few commits". A missing `base_sha` means the
@@ -33,6 +36,17 @@ a wrong base produces confident findings about code nobody changed.
 Read a whole file **only** when the diff alone cannot answer a specific question you have about
 a specific hunk. Name the file and the question when you do. Never read the repo to build
 general context — that is the expense this agent exists to avoid.
+
+## File scope
+
+**May write: nothing.** This agent has no write tools and produces a verdict, not a change.
+
+**May read:** the diff `base_sha..HEAD`, `PROGRESS.md` for the packet, and the `godot-conventions`
+or `asset-import` skill when the diff touches their territory. A whole file only when a specific
+hunk raises a specific question — name the file and the question.
+
+The repo at large is out of scope. Reading it to build general context is the expense this agent
+exists to avoid.
 
 ## What to check
 

@@ -23,6 +23,10 @@ task genuinely cannot be done without reading outside it, that is an escalation.
 
 ## Start of task
 
+The **working directory is the game repo**, always. Every git call — `rev-parse`, `add`,
+`commit` — targets that repo's history with no `-C` and no path juggling. If cwd is studio-core,
+stop: `base_sha` would be stamped from the wrong tree.
+
 **Check `attempts` first.**
 
 - `attempts >= 2` → **stop immediately.** Do not attempt a fix. Report to the human with the

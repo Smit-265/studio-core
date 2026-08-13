@@ -1,0 +1,110 @@
+# build.yml - DOCUMENTED STUB. It does not export anything, by design.
+#
+# WHY THIS IS A STUB
+#
+# A Godot headless export needs `export_presets.cfg`: platform targets, feature
+# tags, binary names, signing identities, and per-platform texture formats.
+# Every one of those is game-specific, and studio-core has no game and no
+# project.godot. A workflow here could only either guess at presets that belong
+# to a repo it cannot see, or carry a fake project to export - both of which
+# make the file lie about what it does.
+#
+# So this workflow does one honest thing: it tells you what to put in the game
+# repo's own build.yml. Copy the commented job below into `game-<name>` and fill
+# in the presets. The verify.yml in this repo is the part that generalises;
+# export is not.
+#
+# The trigger is left as workflow_dispatch so a curious click reports the
+# situation rather than silently succeeding at nothing.
+
+name: build (stub)
+
+on:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.7.1"
+
+jobs:
+  explain:
+    name: explain why there is nothing to build here
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report
+        run: |
+          echo "studio-core is a harness, not a game. There is no project.godot"
+          echo "and no export_presets.cfg here, so there is nothing to export."
+          echo
+          echo "Export belongs in the game repo. See the commented template in"
+          echo ".github/workflows/build.yml in this repository."
+
+# ---------------------------------------------------------------------------
+# TEMPLATE for a game repo's .github/workflows/build.yml
+#
+# Requires, in the game repo:
+#   - export_presets.cfg committed (it holds no secrets; signing material does,
+#     and belongs in repository secrets)
+#   - a matching export template for the pinned Godot version
+#   - a tag push to trigger it, so builds map to a version rather than a commit
+#
+# name: build
+#
+# on:
+#   push:
+#     tags: ["v*"]
+#   workflow_dispatch:
+#
+# env:
+#   GODOT_VERSION: "4.7.1"
+#   EXPORT_PRESET: "Linux/X11"        # must match a preset name exactly
+#
+# jobs:
+#   export:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#         with: { path: game }
+#
+#       - uses: actions/checkout@v4
+#         with:
+#           repository: <owner>/studio-core
+#           path: studio-core          # sibling layout, so ../studio-core resolves
+#
+#       - uses: actions/setup-python@v5
+#         with: { python-version: "3.11" }
+#       - run: python -m pip install --quiet pyyaml
+#
+#       - name: Install Godot and export templates
+#         run: |
+#           set -euo pipefail
+#           base="https://github.com/godotengine/godot-builds/releases/download"
+#           tag="${GODOT_VERSION}-stable"
+#           curl -fsSL -o godot.zip "$base/$tag/Godot_v${tag}_linux.x86_64.zip"
+#           unzip -q godot.zip && mv "Godot_v${tag}_linux.x86_64" /usr/local/bin/godot
+#           chmod +x /usr/local/bin/godot
+#           curl -fsSL -o templates.tpz "$base/$tag/Godot_v${tag}_export_templates.tpz"
+#           mkdir -p ~/.local/share/godot/export_templates
+#           unzip -q templates.tpz -d /tmp/tpl
+#           mv /tmp/tpl/templates "~/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+#
+#       # Never export something that has not passed the gate. A build is a
+#       # promise; verify.sh is what makes it one.
+#       - name: Verify before building
+#         run: ./studio-core/scripts/verify.sh ./game --strict
+#
+#       - name: Export
+#         run: |
+#           mkdir -p game/build
+#           godot --headless --path ./game \
+#             --export-release "$EXPORT_PRESET" build/game.x86_64
+#
+#       # build.export_mb in config/budgets.yaml applies to the exported build,
+#       # so re-run budgets once the artefact exists.
+#       - name: Budget the exported build
+#         run: python ./studio-core/scripts/check-budgets.py ./game
+#
+#       - uses: actions/upload-artifact@v4
+#         with:
+#           name: game-${{ github.ref_name }}
+#           path: game/build/
+# ---------------------------------------------------------------------------

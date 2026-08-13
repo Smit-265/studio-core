@@ -69,7 +69,18 @@ This field, not the conversation, is what the **two-strike rule** reads:
   finding `attempts: 2` must not reset it to zero and start looping again. A loop on a failing
   gate is the most expensive thing an agent can do.
 
-Resetting `attempts` is a human decision, made after the human has looked at the failure.
+### Resetting attempts
+
+`attempts` returns to `0` in exactly one circumstance: **a human amends the packet's `goal`,
+`scope` or `acceptance`.** The task changed, so the count against the old task no longer applies.
+
+It does **not** reset on a session boundary, on a retry, on a rebase, or because an agent judged
+the earlier failures unrelated. No agent resets it under any circumstance.
+
+Amending a packet **without** resetting is equally valid and means the human wants the count
+carried — typically when the amendment is a clarification rather than a change of task. The
+human decides which; an agent that finds an amended packet still at `attempts: 2` treats it as
+`attempts: 2`.
 
 ---
 

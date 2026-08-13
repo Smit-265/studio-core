@@ -1,0 +1,139 @@
+# verify.yml - the primary verification path.
+#
+# Runs on free-tier runners and consumes no Claude quota, which is the whole
+# point: verification that costs nothing should never be done by an agent.
+#
+# studio-core has no game project of its own, so running verify.sh against this
+# repo only exercises the graceful-degradation path. The real test is the
+# dogfood job: scaffold a game repo with new-project.sh and verify that, then
+# prove the gate actually fails on a deliberate defect. A gate that has never
+# been seen to fail is not known to be a gate.
+
+name: verify
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # Pinned, matching DECISIONS.md D-002. Bumping this is a deliberate act.
+  GODOT_VERSION: "4.7.1"
+
+jobs:
+  scripts:
+    name: scripts (no engine)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: python -m pip install --quiet pyyaml
+
+      - name: CLAUDE.md is within its 200-line cap
+        run: |
+          lines=$(wc -l < CLAUDE.md)
+          echo "CLAUDE.md: $lines lines"
+          [ "$lines" -le 200 ] || { echo "::error::CLAUDE.md is $lines lines, cap is 200"; exit 1; }
+
+      - name: skills are within their 150-line caps
+        run: |
+          fail=0
+          for f in .claude/skills/*/SKILL.md; do
+            lines=$(wc -l < "$f")
+            echo "$f: $lines lines"
+            [ "$lines" -le 150 ] || { echo "::error::$f is $lines lines, cap is 150"; fail=1; }
+          done
+          exit $fail
+
+      - name: verify.sh degrades gracefully with no project present
+        run: ./scripts/verify.sh . --no-engine
+
+  dogfood:
+    name: dogfood (scaffold and verify a game repo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: studio-core
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: python -m pip install --quiet pyyaml
+
+      - name: Cache Godot
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-linux
+
+      - name: Install Godot ${{ env.GODOT_VERSION }} (headless)
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p ~/godot && cd ~/godot
+          base="https://github.com/godotengine/godot-builds/releases/download"
+          file="Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          curl -fsSL -o godot.zip "$base/${GODOT_VERSION}-stable/${file}.zip"
+          unzip -q godot.zip
+          mv "$file" godot
+          chmod +x godot
+
+      - name: Register Godot on PATH
+        run: echo "$HOME/godot" >> "$GITHUB_PATH"
+
+      - run: godot --version
+
+      # new-project.sh defaults to studio-core's parent, so the game repo lands
+      # as a sibling and the ../studio-core convention resolves with no setup.
+      # That is the path a human takes, so it is the path CI should take.
+      - name: Scaffold a game repo
+        run: |
+          git config --global user.email "ci@example.invalid"
+          git config --global user.name "CI"
+          ./studio-core/scripts/new-project.sh dogfood
+
+      - name: verify.sh passes on a freshly scaffolded project
+        run: ./studio-core/scripts/verify.sh ./game-dogfood
+
+      - name: verify.sh FAILS on a deliberate GDScript syntax error
+        run: |
+          mkdir -p game-dogfood/scripts
+          printf 'extends Node\n\nfunc _ready() -> void\n\tprint("no colon")\n' \
+            > game-dogfood/scripts/broken.gd
+          if ./studio-core/scripts/verify.sh ./game-dogfood; then
+            echo "::error::verify.sh exited 0 on a file that does not parse"
+            exit 1
+          fi
+          echo "gate held: verify.sh exited non-zero"
+          rm game-dogfood/scripts/broken.gd
+
+      - name: check-licences.py FAILS on an asset with no manifest entry
+        run: |
+          mkdir -p game-dogfood/assets/props
+          printf 'not a real asset' > game-dogfood/assets/props/orphan.png
+          if python ./studio-core/scripts/check-licences.py ./game-dogfood; then
+            echo "::error::check-licences.py exited 0 on an unrecorded asset"
+            exit 1
+          fi
+          echo "ship-blocker held: check-licences.py exited non-zero"
+          rm game-dogfood/assets/props/orphan.png
+
+      - name: check-loaders.py FAILS on a drifted loader
+        run: |
+          printf '\nlocal edit that does not belong in a loader\n' \
+            >> game-dogfood/.claude/agents/builder.md
+          if python ./studio-core/scripts/check-loaders.py ./game-dogfood; then
+            echo "::error::check-loaders.py exited 0 on a drifted loader"
+            exit 1
+          fi
+          echo "drift detected"
+          ./studio-core/scripts/sync-loaders.sh ./game-dogfood
+          python ./studio-core/scripts/check-loaders.py ./game-dogfood
