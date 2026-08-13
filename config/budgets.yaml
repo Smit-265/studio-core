@@ -1,0 +1,136 @@
+# budgets.yaml — asset budget thresholds (studio-core defaults)
+#
+# Read by: scripts/check-budgets.py. The script hardcodes no numbers; every
+#   threshold it enforces comes from here or from a per-game override.
+#
+# MERGE SEMANTICS
+#   1. Load this file (studio-core defaults).
+#   2. If <game-repo>/config/budgets.yaml exists, deep-merge it on top.
+#   3. Merge is key-by-key at every level. A scalar leaf in the game file
+#      replaces the default leaf. A mapping is merged, not replaced, so a game
+#      overriding one triangle class keeps the other classes.
+#   4. Lists are REPLACED wholesale, never concatenated — a game redefining
+#      `classify.rules` replaces the entire rule set. This is deliberate: rule
+#      order matters, and merging ordered rules produces surprises.
+#   5. An unknown key in a game override is an error, not a silent no-op.
+#      Fail loudly; a typo'd threshold that silently does nothing is worse than
+#      no threshold at all.
+#
+# These defaults suit a small-team, stylised 3D project. They are a starting
+# point, not a law of nature — a game that deliberately needs different numbers
+# records the decision in DECISIONS.md §4 and overrides here. Keep the two in
+# agreement: DECISIONS.md holds the decision, this file holds the number.
+
+version: 1
+
+# ---------------------------------------------------------------------------
+# Severity. A violation over the hard limit fails (exit non-zero). A violation
+# over warn_at_percent of the limit prints a warning and still passes, so
+# budgets are visible before they are breached.
+# ---------------------------------------------------------------------------
+warn_at_percent: 90
+
+# ---------------------------------------------------------------------------
+# classify — how a file gets its budget class.
+#
+# Rules are evaluated in order; FIRST MATCH WINS. Globs match the repo-relative
+# path. Anything matching no rule falls to `default`, which is intentionally
+# tight — an unclassified asset should be noisy, not quietly exempt.
+#
+# An asset may override its class in assets.yaml with `budget_class: <name>`,
+# which beats every rule here. Use that for the genuine exception, not to dodge
+# a budget wholesale.
+# ---------------------------------------------------------------------------
+classify:
+  default: prop_small
+  rules:
+    - glob: "**/characters/player/**"
+      class: character_player
+    - glob: "**/characters/**"
+      class: character_npc
+    - glob: "**/environment/**"
+      class: environment_module
+    - glob: "**/vegetation/**"
+      class: vegetation
+    - glob: "**/props/large/**"
+      class: prop_large
+    - glob: "**/props/medium/**"
+      class: prop_medium
+    - glob: "**/props/**"
+      class: prop_small
+
+# ---------------------------------------------------------------------------
+# geometry — triangle counts per mesh, by class. Triangles, not vertices, not
+# faces. A file containing several meshes is checked per mesh and, against
+# `per_file_total`, in aggregate.
+# ---------------------------------------------------------------------------
+geometry:
+  triangles:
+    prop_small: 1500
+    prop_medium: 5000
+    prop_large: 15000
+    environment_module: 8000
+    vegetation: 3000
+    character_npc: 25000
+    character_player: 40000
+  per_file_total: 60000
+
+# ---------------------------------------------------------------------------
+# textures — maximum dimension in pixels, longest edge. Keyed by map role,
+# inferred from the filename suffix in `role_suffixes` below; unmatched files
+# use `default`.
+#
+# Non-power-of-two textures cost memory and break some compression paths.
+# ---------------------------------------------------------------------------
+textures:
+  max_dimension:
+    default: 1024
+    albedo: 2048
+    normal: 2048
+    roughness: 1024
+    metallic: 1024
+    ao: 1024
+    emission: 1024
+    ui: 2048
+    skybox: 4096
+  require_power_of_two: true
+  role_suffixes:
+    albedo: ["_albedo", "_basecolor", "_col", "_diff"]
+    normal: ["_normal", "_nrm", "_n"]
+    roughness: ["_rough", "_rgh"]
+    metallic: ["_metal", "_mtl"]
+    ao: ["_ao", "_occlusion"]
+    emission: ["_emit", "_emission"]
+
+# ---------------------------------------------------------------------------
+# files — maximum size on disk, in megabytes, by asset type. Type comes from
+# the extension map below. An unknown extension under the asset root is a
+# violation, not a pass: it means either a stray file or a missing entry here.
+# ---------------------------------------------------------------------------
+files:
+  max_mb:
+    model: 10
+    texture: 8
+    material: 1
+    audio_sfx: 2
+    audio_music: 20
+    font: 2
+    shader: 1
+  extensions:
+    model: [".glb", ".gltf", ".obj", ".fbx", ".blend", ".dae"]
+    texture: [".png", ".jpg", ".jpeg", ".webp", ".exr", ".hdr", ".ktx2"]
+    material: [".tres", ".material"]
+    audio_sfx: [".wav"]
+    audio_music: [".ogg", ".mp3"]
+    font: [".ttf", ".otf", ".woff2"]
+    shader: [".gdshader", ".glsl"]
+
+# ---------------------------------------------------------------------------
+# build — whole-project ceilings. `source_mb` covers the asset root as it sits
+# in the repo; `export_mb` covers an exported build if one is present. Both are
+# there to catch the slow drift that no single asset triggers.
+# ---------------------------------------------------------------------------
+build:
+  source_mb: 2048
+  export_mb: 4096
+  max_asset_count: 5000

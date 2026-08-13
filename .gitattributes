@@ -1,0 +1,8 @@
+* text=auto
+
+# Shell scripts run on Linux CI. CRLF line endings make them fail with
+# "bad interpreter: /bin/bash^M", so keep them LF in the working copy too.
+*.sh   text eol=lf
+*.py   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf

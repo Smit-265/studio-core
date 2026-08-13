@@ -1,0 +1,29 @@
+# budgets.yaml — per-game overrides for {{GAME_NAME}}
+#
+# Deep-merged on top of studio-core's config/budgets.yaml. Anything not
+# overridden here keeps the studio-core default, so this file should stay
+# short: it records where this game deliberately differs, nothing else.
+#
+# Merge rules (see studio-core/config/budgets.yaml for the full statement):
+#   - mappings merge key-by-key; a scalar leaf here replaces the default
+#   - LISTS REPLACE WHOLESALE — redefining classify.rules replaces every rule,
+#     so copy the ones still wanted
+#   - an unknown key here is a hard error, not a silent no-op
+#
+# Every override should have a matching decision in DECISIONS.md §4. This file
+# holds the number; that file holds the reason.
+
+version: 1
+
+# Examples — delete or replace.
+#
+# geometry:
+#   triangles:
+#     prop_small: 800          # tighter than default: heavy prop reuse per room
+#
+# textures:
+#   max_dimension:
+#     albedo: 1024             # tighter than default: stylised, low-detail art
+#
+# build:
+#   export_mb: 1024            # target platform storage limit

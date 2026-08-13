@@ -1,0 +1,88 @@
+# assets.yaml — machine-readable asset provenance
+#
+# SOURCE OF TRUTH for every asset that ships. ASSET_MANIFEST.md is generated
+# from this file and must never be hand-edited.
+#
+# Written by: asset-pipeline (appends one entry per acquisition).
+# Validated by: scripts/check-licences.py — cross-references `assets:` against
+#   the filesystem. Any file in the asset directory without an entry, or any
+#   entry without a licence, fails the build. Ship-blocker.
+# Rendered by: scripts/gen-manifest.py -> ASSET_MANIFEST.md
+#
+# Rules:
+#   1. Append at acquisition time, not "before release".
+#   2. `path` is repo-relative, matching the file on disk exactly, including case.
+#   3. `licence` is an SPDX identifier where one exists (CC0-1.0, CC-BY-4.0,
+#      OFL-1.1, MIT). Otherwise the licence name exactly as the source states it.
+#      Never blank, never `free`, never `unknown`. Unlicensed means unshippable.
+#   4. `source_url` resolves to the asset's own page — not a search result,
+#      not a site homepage. Studio-made work uses `original`.
+#   5. Deleting an asset means deleting its entry, in the same commit.
+#   6. Sources must already be approved in DECISIONS.md §2 before acquisition.
+#
+# Schema version. Bump only when the shape below changes; scripts check it.
+version: 1
+
+# Repo-relative root that check-licences.py walks. Every file beneath it,
+# excluding `ignore` patterns, must have an entry in `assets`.
+asset_root: assets/
+
+# Files under asset_root that are not assets and need no provenance entry.
+# Glob patterns, matched against the path relative to asset_root.
+ignore:
+  - "**/*.import"       # engine-generated import metadata
+  - "**/.gdignore"
+  - "**/README.md"
+
+# ---------------------------------------------------------------------------
+# assets — one entry per shipping file.
+#
+# Fields:
+#   path                 (required) repo-relative path, exact case
+#   type                 (required) model | texture | material | audio | font | shader | other
+#   source_url           (required) asset's own page, or `original`
+#   author               (required) creator name, or the studio for original work
+#   licence              (required) SPDX identifier, or the licence name verbatim
+#   attribution_required (required) true | false — drives the credits block
+#   date_added           (required) YYYY-MM-DD
+#   modifications        (optional) list of {change, date}; some licences
+#                        require stating that changes were made
+#   notes                (optional) one line, free text
+#
+# Example entry — delete before first real acquisition:
+#
+#   - path: assets/props/crate_wooden.glb
+#     type: model
+#     source_url: https://example.org/assets/crate-wooden
+#     author: A. Example
+#     licence: CC0-1.0
+#     attribution_required: false
+#     date_added: 2026-01-01
+#     modifications:
+#       - change: retopologised from 4.2k to 900 tris
+#         date: 2026-01-03
+#     notes: base prop, reused across level kits
+# ---------------------------------------------------------------------------
+assets: []
+
+# ---------------------------------------------------------------------------
+# rejected — assets evaluated and turned down.
+#
+# Kept so a later session does not re-source and re-reject the same thing.
+# Cheaper to read one entry than to repeat the search.
+#
+# Fields:
+#   source_url (required)  name       (required)
+#   reason     (required)  one of: licence | style | budget | quality | other
+#   detail     (optional)  one line
+#   date       (required)  YYYY-MM-DD
+#
+# Example — delete before first real rejection:
+#
+#   - name: Ornate Lantern
+#     source_url: https://example.org/assets/ornate-lantern
+#     reason: budget
+#     detail: 18k tris, over the prop cap and not worth the retopo time
+#     date: 2026-01-04
+# ---------------------------------------------------------------------------
+rejected: []
