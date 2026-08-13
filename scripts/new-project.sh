@@ -73,17 +73,25 @@ fi
 
 # Substitute only the three scaffold placeholders. Every other {{...}} in the
 # templates is a prompt for the human and must survive.
+# The game's CI checks studio-core out by name, so derive owner/repo from this
+# checkout's origin. Left as a placeholder when there is no remote yet - a
+# workflow that names a repo nobody can resolve should say so, not guess.
+SC_REPO=$(git -C "$STUDIO_CORE" remote get-url origin 2>/dev/null \
+  | sed -e 's|^git@[^:]*:||' -e 's|^https\{0,1\}://[^/]*/||' -e 's|\.git$||')
+[ -n "$SC_REPO" ] || SC_REPO="<owner>/studio-core"
+
 fill() {
   sed -e "s|{{GAME_NAME}}|game-$NAME|g" \
       -e "s|{{DATE}}|$TODAY|g" \
       -e "s|{{STUDIO_CORE_PATH}}|$SC_PATH_NOTE|g" \
+      -e "s|{{STUDIO_CORE_REPO}}|$SC_REPO|g" \
       "$1" > "$2"
 }
 
 sc_section "scaffolding game-$NAME"
 
 mkdir -p "$TARGET/assets" "$TARGET/config" "$TARGET/scenes" "$TARGET/scripts" "$TARGET/tests" \
-  || sc_die "could not create $TARGET"
+  "$TARGET/.github/workflows" || sc_die "could not create $TARGET"
 
 fill "$TEMPLATES/game-CLAUDE.md"  "$TARGET/CLAUDE.md"
 fill "$TEMPLATES/GAME_PLAN.md"    "$TARGET/GAME_PLAN.md"
@@ -91,7 +99,12 @@ fill "$TEMPLATES/PROGRESS.md"     "$TARGET/PROGRESS.md"
 fill "$TEMPLATES/DECISIONS.md"    "$TARGET/DECISIONS.md"
 fill "$TEMPLATES/assets.yaml"     "$TARGET/assets.yaml"
 fill "$TEMPLATES/budgets.yaml"    "$TARGET/config/budgets.yaml"
-sc_ok "state files, CLAUDE.md, config/budgets.yaml"
+fill "$TEMPLATES/game-verify.yml"  "$TARGET/.github/workflows/verify.yml"
+sc_ok "state files, CLAUDE.md, config/budgets.yaml, CI workflow"
+if [ "$SC_REPO" = "<owner>/studio-core" ]; then
+  sc_warn "studio-core has no origin remote - .github/workflows/verify.yml names"
+  sc_info "<owner>/studio-core as a placeholder. Fill it in before pushing."
+fi
 
 # Keep otherwise-empty scaffold directories in git.
 for d in assets scenes scripts tests; do : > "$TARGET/$d/.gitkeep"; done

@@ -1,0 +1,97 @@
+# verify.yml - the gate for {{GAME_NAME}}.
+#
+# Runs on free-tier runners and consumes no Claude quota. That is the point:
+# verification that costs nothing should never be done by an agent. Prefer
+# reading this workflow's output to asking whether something works.
+#
+# STUDIO-CORE IS CHECKED OUT AT HEAD, not pinned - see DECISIONS.md D-001.
+# A studio-core change can therefore turn this repo's CI red without anything
+# in this repo changing. That is the tradeoff the studio accepted deliberately:
+# one harness for every game, with breakage surfacing immediately rather than
+# at some later upgrade. This workflow is where it becomes visible, and a red
+# build after a harness change is the expected signal, not a surprise.
+#
+# When this game ships, pin it: convert studio-core to a submodule and point
+# the checkout below at the pinned ref. Record that as its own decision.
+
+name: verify
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # Pinned, matching DECISIONS.md D-002. Bumping this is a deliberate act.
+  GODOT_VERSION: "4.7.1"
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the game
+        uses: actions/checkout@v4
+        with:
+          path: game
+
+      # Sibling layout, matching D-001. STUDIO_CORE is set explicitly below
+      # rather than leaning on ../studio-core resolution: in CI the working
+      # directory is not where a human would run this from, and a resolution
+      # that silently picks the wrong tree is worse than one that is stated.
+      - name: Check out studio-core (head)
+        uses: actions/checkout@v4
+        with:
+          repository: {{STUDIO_CORE_REPO}}
+          path: studio-core
+          # For a private studio-core, add a PAT with repo:read as a secret:
+          # token: ${{ secrets.STUDIO_CORE_TOKEN }}
+
+      - name: Point at studio-core
+        run: echo "STUDIO_CORE=$GITHUB_WORKSPACE/studio-core" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: python -m pip install --quiet pyyaml
+
+      - name: Cache Godot
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-linux
+
+      - name: Install Godot ${{ env.GODOT_VERSION }} (headless)
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p ~/godot && cd ~/godot
+          base="https://github.com/godotengine/godot-builds/releases/download"
+          file="Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          curl -fsSL -o godot.zip "$base/${GODOT_VERSION}-stable/${file}.zip"
+          unzip -q godot.zip
+          mv "$file" godot
+          chmod +x godot
+
+      - name: Register Godot on PATH
+        run: echo "$HOME/godot" >> "$GITHUB_PATH"
+
+      - run: godot --version
+
+      # The whole gate: engine import, per-file GDScript parse, unit tests,
+      # loader drift, manifest freshness, licences, budgets.
+      #
+      # Deliberately NOT --strict. Strict turns skips into failures, and a repo
+      # with no test framework installed yet would go red on day one for a
+      # legitimate skip. The failure mode strict guards against - a broken Godot
+      # silently skipping the engine check - is already covered by the explicit
+      # `godot --version` step above, which fails loudly first.
+      #
+      # Add --strict once this game has a test framework, and the gate gets
+      # stricter for free.
+      - name: verify.sh
+        working-directory: game
+        run: "$STUDIO_CORE/scripts/verify.sh ."
