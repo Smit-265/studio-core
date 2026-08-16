@@ -28,6 +28,7 @@ shipped work:
 studio-core/
 ├── CLAUDE.md                 # ships with every request — ≤200 lines, hard limit
 ├── README.md
+├── VERSION                   # harness semver — see "Versioning the harness"
 ├── .claude/
 │   ├── agents/               # planner, builder, reviewer, asset-pipeline
 │   ├── commands/             # design-game, design-milestone, plan-milestone,
@@ -37,7 +38,7 @@ studio-core/
 │   └── budgets.yaml          # default asset thresholds; games override per-repo
 ├── scripts/                  # verify.sh, new-project.sh, check-budgets.py,
 │                             # check-licences.py, gen-manifest.py, session-report.sh,
-│                             # check-loaders.py, sync-loaders.sh
+│                             # check-loaders.py, sync-loaders.sh, check-plan.py
 │                             # _resolve.sh, _sclib.py — sourced/imported, not run
 ├── templates/                # state files, assets.yaml, budgets override, game CLAUDE.md
 └── .github/workflows/        # verify.yml, build.yml
@@ -107,6 +108,18 @@ installed or no project is present.
 Budget thresholds come from `config/budgets.yaml`, deep-merged with the game repo's own
 `config/budgets.yaml` if present. No script hardcodes a number.
 
+`config/budgets.yaml` covers **assets only** — triangles, texture dimensions, file sizes.
+Gameplay numbers live in the game's `tuning/game_tuning.tres`, a Godot Resource that scaffolds
+with every new project and is editable in the inspector between playtests. The two are not
+interchangeable: `check-budgets.py` exits 2 on a key it does not know, and Godot cannot read
+YAML at runtime.
+
+`check-plan.py` then reconciles `GAME_PLAN.md` §3 against the merged budget config and warns
+when the prose states a limit the config does not enforce. It is **warning-only and always
+exits 0** — §3 is written with a human during design, and a hard gate there would fire on
+phrasing rather than substance. The fix is always the same: put the number in the config and
+have the plan point at it.
+
 CI runs the same script on push and PR via `.github/workflows/verify.yml`, on the free tier.
 That is the primary verification path and it consumes no Claude quota — prefer it to asking an
 agent whether something works.
@@ -168,6 +181,25 @@ Games track studio-core's head; there is no version pinning. The accepted conseq
 studio-core change can break an existing game repo — `verify.sh` is what catches it. Once a
 game ships, pin it by converting studio-core to a git submodule in that repo; the resolution
 order above already accommodates a submodule path via `$STUDIO_CORE`.
+
+### Versioning the harness
+
+`VERSION` at this repo's root holds a semver string. It is the harness's version, not any
+game's.
+
+| Bump | When |
+|---|---|
+| **minor** (`0.1.0` → `0.2.0`) | An agent definition, a skill contract, or a script interface changes. Anything a game repo depends on by name or by shape: an agent's scope or non-goals, a skill's rules, a script's arguments, exit codes or output format, the task packet fields, a state-file template's structure. |
+| **patch** (`0.1.0` → `0.1.1`) | A fix that changes no contract. Bug fixes inside a script, wording, added examples, tightened checks that accept the same inputs. |
+| **major** | Reserved. Nothing is `1.0.0` until a game has shipped against it. |
+
+Bump `VERSION` in the same commit as the change, and tag that commit `v<version>`.
+
+Games track head rather than pinning (D-001), so the version exists to answer a question after
+the fact: *which harness was this game working against when it broke?* `verify.sh` records the
+version and short SHA into the game's `PROGRESS.md` on every run — with `-dirty` appended when
+studio-core has uncommitted edits, because an uncommitted harness is not the SHA it claims to
+be. `session-report.sh` reads that stamp back and flags it when studio-core has moved since.
 
 ## Build status
 

@@ -8,8 +8,12 @@
 #       --quiet       less chatter, same exit code
 #
 # Runs, in order: engine import, GDScript parse, unit tests, manifest freshness,
-# licences, budgets. Roughly 90% of verification lives here rather than in an
+# licences, budgets, and a warning-only reconciliation of GAME_PLAN.md against
+# the budget config. Roughly 90% of verification lives here rather than in an
 # agent, because a script that costs nothing can run on every commit.
+#
+# Also stamps the studio-core version and SHA it ran as into the game's
+# PROGRESS.md, so a game repo records which harness it was verified against.
 #
 # Exit: 0 all checks passed | 1 one or more checks failed | 2 could not run.
 
@@ -27,7 +31,7 @@ while [ $# -gt 0 ]; do
     --strict)    STRICT=1 ;;
     --no-engine) NO_ENGINE=1 ;;
     --quiet)     QUIET=1 ;;
-    -h|--help)   sed -n '2,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)   sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)          printf 'error: unknown option %s (see --help)\n' "$1" >&2; exit 2 ;;
     *)           [ -n "$PROJECT_ARG" ] && { printf 'error: more than one project path given\n' >&2; exit 2; }
                  PROJECT_ARG="$1" ;;
@@ -42,6 +46,20 @@ export SC_PROJECT_HINT
 . "$SELF_DIR/_resolve.sh"
 
 PROJECT=$(sc_resolve_project "${PROJECT_ARG:-$PWD}") || exit 2
+
+# --- harness identity ------------------------------------------------------
+# Games track studio-core's head rather than pinning it (D-001), so nothing in a
+# game repo records which harness it was working against. This does: the version
+# from VERSION, the short SHA, and `-dirty` when the checkout has local edits,
+# because an uncommitted harness is not the SHA it claims to be.
+SC_VERSION=$(tr -d '[:space:]' < "$STUDIO_CORE/VERSION" 2>/dev/null)
+[ -n "$SC_VERSION" ] || SC_VERSION="unknown"
+SC_SHA=$(git -C "$STUDIO_CORE" rev-parse --short HEAD 2>/dev/null) || SC_SHA=""
+[ -n "$SC_SHA" ] || SC_SHA="unknown"
+if [ "$SC_SHA" != "unknown" ] && [ -n "$(git -C "$STUDIO_CORE" status --porcelain 2>/dev/null)" ]; then
+  SC_SHA="$SC_SHA-dirty"
+fi
+SC_STAMP="studio-core $SC_VERSION ($SC_SHA)"
 
 FAILURES=0
 SKIPS=0
@@ -63,6 +81,27 @@ soft_skip() {
 [ "$QUIET" -eq 1 ] || {
   printf '%sverify%s  project: %s\n' "$SC_BLD" "$SC_OFF" "$PROJECT"
   printf '        studio-core: %s\n' "$STUDIO_CORE"
+  printf '        harness: %s %s(%s)%s\n' "$SC_VERSION" "$SC_DIM" "$SC_SHA" "$SC_OFF"
+}
+
+# Stamp the harness identity into PROGRESS.md, replacing the existing line if
+# there is one and inserting after `Last updated` if there is not. Rewritten
+# only when the value actually changes, so a re-run costs no diff.
+sc_stamp_progress() {
+  local f="$1" line tmp
+  line="**Harness:** $SC_STAMP · recorded $(date +%Y-%m-%d) by \`verify.sh\`"
+  tmp=$(mktemp) || return 1
+  if grep -q '^\*\*Harness:\*\*' "$f"; then
+    STAMP="$line" awk '/^\*\*Harness:\*\*/ && !d { print ENVIRON["STAMP"]; d=1; next } { print }' \
+      "$f" > "$tmp"
+  elif grep -q '^\*\*Last updated:\*\*' "$f"; then
+    STAMP="$line" awk '{ print } /^\*\*Last updated:\*\*/ && !d { print ENVIRON["STAMP"]; d=1 }' \
+      "$f" > "$tmp"
+  else
+    rm -f "$tmp"; return 1
+  fi
+  if cmp -s "$tmp" "$f"; then rm -f "$tmp"; return 0; fi
+  cat "$tmp" > "$f" && rm -f "$tmp"
 }
 
 # ---------------------------------------------------------------------------
@@ -78,6 +117,15 @@ if [ -n "$missing_state" ]; then
   sc_info "scaffold them from studio-core/templates/, or run new-project.sh"
 else
   sc_ok "all four present"
+fi
+
+if [ -f "$PROJECT/PROGRESS.md" ] && [ "$PROJECT" != "$STUDIO_CORE" ]; then
+  if sc_stamp_progress "$PROJECT/PROGRESS.md"; then
+    sc_ok "harness recorded in PROGRESS.md: $SC_STAMP"
+  else
+    sc_warn "could not stamp PROGRESS.md - it has neither a \`**Harness:**\` nor a"
+    sc_info "\`**Last updated:**\` line. Re-scaffold it from templates/PROGRESS.md."
+  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -193,6 +241,13 @@ $SC_PYTHON "$SC_SCRIPTS/check-licences.py" "$PROJECT" || step_failed
 
 sc_section "budgets"
 $SC_PYTHON "$SC_SCRIPTS/check-budgets.py" "$PROJECT" || step_failed
+
+# Prose vs enforced config. Deliberately not gated: GAME_PLAN.md §3 is written
+# with a human during design, and a hard fail on prose would fire on phrasing
+# rather than on substance. No `|| step_failed` here, and the script itself
+# always exits 0 - both, so neither can turn this into a gate by accident.
+sc_section "plan"
+$SC_PYTHON "$SC_SCRIPTS/check-plan.py" "$PROJECT" || true
 
 # ---------------------------------------------------------------------------
 # summary

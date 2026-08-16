@@ -5,13 +5,11 @@ description: GDScript style, node and scene naming, scene organisation, signal p
 
 # godot-conventions
 
-**This file is capped at 150 lines.** A loaded skill sits on-context for the rest of the
-session. Overflow goes in a reference file beside this one, loaded only when its case comes up.
+**Capped at 150 lines** — a loaded skill sits on-context all session. Overflow lives in
+`reference/`, beside this file in studio-core; read one only when its case comes up.
 
 Written against **Godot 4.7.1.stable** (pinned — see `DECISIONS.md` D-002). Do not apply Godot 3
 idioms; they are silently wrong more often than they are loudly broken.
-
----
 
 ## Naming
 
@@ -35,36 +33,13 @@ is this?" churn.
 
 ## Script structure
 
-Fixed order. Reviewers check it, so write it this way the first time:
+Fixed order, and reviewers check it — write it this way the first time:
 
-```gdscript
-class_name PauseMenu
-extends Control
-## One-line summary of what this node is responsible for.
+`class_name` · `extends` · docstring · signals · enums · constants · `@export` · public vars ·
+private vars · `@onready` · `_init` · `_ready` · other engine callbacks · public methods ·
+private methods · signal handlers.
 
-signal resumed
-
-const FADE_TIME := 0.2
-
-@export var start_hidden: bool = true
-
-var _is_open := false
-
-@onready var _panel: Panel = $Panel
-
-func _ready() -> void:
-	...
-
-func toggle() -> void:      # public API next
-	...
-
-func _on_resume_pressed() -> void:   # private and handlers last
-	...
-```
-
-Order: `class_name` · `extends` · docstring · signals · enums · constants · `@export` ·
-public vars · private vars · `@onready` · `_init` · `_ready` · other engine callbacks ·
-public methods · private methods · signal handlers.
+Worked example with the reasoning and the usual mistakes: `reference/script-structure.md`.
 
 ## Typing
 
@@ -119,6 +94,7 @@ func _ready() -> void:
 scenes/        one directory per feature area, mirroring scripts/
 scripts/       .gd files, mirroring scenes/
 assets/        art, audio, fonts - see the asset-import skill
+tuning/        game_tuning.gd + .tres - gameplay values, see below
 tests/         test scripts, named test_<thing>.gd
 ```
 
@@ -133,6 +109,31 @@ what makes a task's `scope` list short and enumerable.
   is genuinely dynamic.
 - Resources are shared by reference. Call `.duplicate()` before mutating one at runtime, or two
   instances will quietly share state.
+
+## Gameplay tuning
+
+Gameplay numbers — drain rates, speeds, damage, timers, spawn counts — live in
+`tuning/game_tuning.tres`, an instance of the `GameTuning` Resource declared in
+`tuning/game_tuning.gd`. Each game carries this as `DECISIONS.md` D-004.
+
+**Never `config/budgets.yaml`.** That is the asset budget schema — triangles, texture
+dimensions, file sizes. `check-budgets.py` exits 2 on a key it does not know, so a gameplay
+value there breaks the budget gate outright, and Godot cannot read YAML at runtime regardless.
+
+```gdscript
+const TUNING: GameTuning = preload("res://tuning/game_tuning.tres")
+
+func _process(delta: float) -> void:
+	_charge -= TUNING.battery_drain_per_second * delta
+```
+
+- Typed `@export`s with defaults, `@export_range` wherever a range exists, units in the name:
+  `fade_time_seconds`, not `fade_time`.
+- Read `TUNING.x` at the point of use. Never copy one into a local `const` — a second source of
+  truth, and the local copy wins silently.
+- Read-only at runtime. Seed a `var` from it; do not write back through it.
+
+Defining, grouping, splitting per system, mutation: `reference/tuning-resource.md`.
 
 ## Things that fail verify
 

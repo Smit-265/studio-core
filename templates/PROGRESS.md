@@ -8,6 +8,7 @@
 > Exact rules: `state-files` skill. Do not freehand prose where a packet belongs.
 
 **Last updated:** {{DATE}} · **Updated by:** {{agent or human}}
+**Harness:** _not yet recorded — run `verify.sh`_
 
 ---
 

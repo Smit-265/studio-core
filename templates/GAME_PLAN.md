@@ -39,7 +39,13 @@ be something an asset can be measured against.
 
 Enforceable: "Low-poly, untextured, three-colour palette." Not enforceable: "Moody."
 
-Numeric limits derived from this line live in `DECISIONS.md` §4 and `config/budgets.yaml`.
+**Point at numbers, do not restate them.** Numeric limits derived from this line are enforced
+from `config/budgets.yaml`; write "Poly budget: see `config/budgets.yaml`" rather than a figure,
+so prose and config cannot disagree. `DECISIONS.md` §4 records why the limit was chosen.
+`verify.sh` warns about a bare limit here that the merged budget config does not carry.
+
+Gameplay numbers are not art direction and do not belong in this section or in
+`config/budgets.yaml` — they live in `tuning/game_tuning.tres`. See `DECISIONS.md` D-004.
 
 _Not yet designed — run `/design-game`._
 

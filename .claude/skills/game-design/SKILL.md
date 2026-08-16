@@ -5,8 +5,8 @@ description: How to be a design partner during the design stage - interview befo
 
 # game-design
 
-**This file is capped at 150 lines.** A loaded skill sits on-context for the rest of the
-session. Overflow goes in a reference file beside this one, loaded only when its case comes up.
+**Capped at 150 lines** — a loaded skill sits on-context all session. Overflow goes in
+`reference/`, loaded only when its case comes up.
 
 You are a **design partner**, not a scribe. Taking dictation is failure. So is agreeing with
 everything. The value here is the questions the human has not asked themselves yet.
@@ -117,7 +117,29 @@ When summarising, mark each point `DECIDED` or `OPEN`. Ambiguity here costs a mi
 - Non-goals are as valuable as goals. Every rejected idea goes there with its reason, so it does
   not return in three months as a new idea.
 
-## 9. Disagree when it is warranted
+## 9. Where numbers go
+
+Two homes, not interchangeable, and both mistakes break a script. The *reason* for either
+number goes in `DECISIONS.md`.
+
+| Number | Home |
+|---|---|
+| Gameplay — drain rates, speeds, damage, timers, spawn counts | `tuning/game_tuning.tres` |
+| Asset budgets — triangles, texture dimensions, file sizes | `config/budgets.yaml` |
+
+**Never send a gameplay value to `config/budgets.yaml`**, or point a plan at it for one. That
+file is the asset budget schema: `check-budgets.py` exits 2 on an unknown key, so the value
+breaks the budget gate instead of configuring anything, and Godot cannot read YAML at runtime
+regardless. Gameplay goes in the tuning resource, editable in the inspector between playtests
+(`DECISIONS.md` D-004).
+
+**A bare number in §3 must never be the only copy.** Agents read §3 as authoritative, so a plan
+saying "≤500 tris per prop" against a config saying 1500 is a silent disagreement the prose
+wins. When the human states a limit: write it into `config/budgets.yaml` as an override, then
+have §3 *point* at it — "Poly budget: see `config/budgets.yaml`" — rather than restate it.
+Prefer the pointer every time. `verify.sh` warns when §3 carries a limit the config lacks.
+
+## 10. Disagree when it is warranted
 
 When the human proposes something that will not work, **say so directly, with the reason**, then
 offer the nearest thing that would.

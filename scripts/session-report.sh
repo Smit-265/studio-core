@@ -85,6 +85,31 @@ DIRTY=$(git status --porcelain | wc -l | tr -d ' ')
 printf '%ssession report%s  %s\n' "$SC_BLD" "$SC_OFF" "$PROJECT"
 printf '  branch %s | %s uncommitted change(s) | %s\n' "$BRANCH" "$DIRTY" "$WINDOW"
 
+# Which harness this repo last verified against. Games track studio-core's head
+# rather than pinning it (D-001), so the harness moves underneath a game between
+# sessions and a resuming session cannot assume it is the one the last session
+# used. verify.sh stamps PROGRESS.md; this reads that stamp back and says so
+# when studio-core has moved since.
+RECORDED=$(sed -n 's/^\*\*Harness:\*\* *//p' "$PROJECT/PROGRESS.md" 2>/dev/null | head -1)
+SC_VERSION=$(tr -d '[:space:]' < "$STUDIO_CORE/VERSION" 2>/dev/null)
+[ -n "$SC_VERSION" ] || SC_VERSION="unknown"
+SC_SHA=$(git -C "$STUDIO_CORE" rev-parse --short HEAD 2>/dev/null)
+[ -n "$SC_SHA" ] || SC_SHA="unknown"
+NOW="studio-core $SC_VERSION ($SC_SHA)"
+
+printf '  harness now: %s\n' "$NOW"
+case "$RECORDED" in
+  "")        printf '  %slast verified against: never recorded - run verify.sh%s\n' \
+               "$SC_DIM" "$SC_OFF" ;;
+  "$NOW"*)   printf '  %slast verified against: same%s\n' "$SC_DIM" "$SC_OFF" ;;
+  *not\ yet\ recorded*)
+             printf '  %slast verified against: never recorded - run verify.sh%s\n' \
+               "$SC_DIM" "$SC_OFF" ;;
+  *)         printf '  %s! last verified against: %s%s\n' "$SC_YEL" "$RECORDED" "$SC_OFF"
+             printf '    %sharness moved since - re-run verify.sh before trusting a green past run%s\n' \
+               "$SC_DIM" "$SC_OFF" ;;
+esac
+
 sc_section "commits"
 if ! git log "${RANGE_ARGS[@]}" --format='  %h  %ad  %s' --date=short 2>/dev/null | grep -q .; then
   printf '  none\n'

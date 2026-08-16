@@ -46,6 +46,12 @@ State lives in the game repo, not here. Four files:
 in a script: studio-core's copy holds the defaults, the game repo's copy holds only that
 game's overrides, and the game's values win on merge.
 
+**`config/budgets.yaml` is asset budgets only** — triangles, texture dimensions, file sizes.
+Gameplay numbers (drain rates, speeds, damage, timers) live in `tuning/game_tuning.tres`, a
+Godot Resource editable in the inspector between playtests. A gameplay value in `budgets.yaml`
+fails `check-budgets.py` at exit 2 and is unreadable from Godot at runtime. See D-004 and the
+`godot-conventions` skill.
+
 studio-core itself is found via `$STUDIO_CORE`, else the sibling directory `../studio-core`.
 
 Work is carried in **task packets** — one YAML shape, written by planner and consumed by
@@ -92,6 +98,8 @@ Run these instead of reasoning about correctness.
   game's override.
 - `scripts/check-licences.py` — validates `assets.yaml` against the filesystem. **Ship-blocker.**
 - `scripts/gen-manifest.py` — regenerates `ASSET_MANIFEST.md` from `assets.yaml`.
+- `scripts/check-plan.py` — warns when `GAME_PLAN.md` §3 states a limit the merged budget
+  config does not enforce. Warning-only; always exits 0.
 - `scripts/new-project.sh <name>` — scaffold a new game repo.
 - `scripts/session-report.sh` — git activity since last session, for cheap resume.
 

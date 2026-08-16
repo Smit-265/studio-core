@@ -70,6 +70,9 @@ that a script could check most of them.
 Numeric budgets enforced by `check-budgets.py` live in `config/budgets.yaml`, not here — this
 table records the *decision*; the config records the *threshold*. Keep them in agreement.
 
+This table and `config/budgets.yaml` are about **assets**. Gameplay numbers do not belong in
+either; they live in `tuning/game_tuning.tres`. See D-004.
+
 ---
 
 ## 5. Architecture decisions
@@ -142,7 +145,33 @@ Newest last. One entry per decision. Keep each under ten lines — this file is 
   Editing a loader's body is always wrong — the content belongs upstream in studio-core.
 - **Status:** active
 
-### D-004 — {{title}}
+### D-004 — Gameplay tuning lives in a Godot Resource, not in YAML
+
+- **Date:** {{DATE}}
+- **Decision:** Every gameplay number — drain rates, speeds, damage, timers, spawn counts,
+  thresholds — lives in `tuning/game_tuning.tres`, an instance of the `GameTuning` Resource
+  defined in `tuning/game_tuning.gd`. `config/budgets.yaml` is the **asset budget schema only**
+  (triangle counts, texture dimensions, file sizes) and never holds gameplay values. Scripts
+  read tuning through a preloaded const, never by re-deriving a number locally.
+- **Rationale:** Two hard reasons and one soft one. `check-budgets.py` fails at exit 2 on any
+  key it does not recognise, so a gameplay value in `budgets.yaml` does not merely sit in the
+  wrong file — it breaks the budget check outright. Godot cannot read YAML at runtime without a
+  third-party parser, so a value there is unreachable from the game even if the checker allowed
+  it. And a `.tres` opens in the inspector, which means a value can be changed between playtests
+  with no rebuild; a number that needs a code edit to adjust will not actually get tuned.
+- **Alternatives rejected:** *`config/budgets.yaml`* for the two reasons above. *Constants in
+  the scripts that use them* because tuning then requires a code change per iteration and the
+  values scatter across files. *A JSON or CFG file in `user://`* because it is not version
+  controlled with the game and diverges per machine. *An autoload with plain vars* because it is
+  not editable in the inspector and not serialisable.
+- **Consequences:** Adding a tuning value is two steps — an `@export` in `game_tuning.gd`, then
+  a value set in the inspector — and both land in the diff, `.tres` being text. The resource is
+  shared by reference, so anything mutating it at runtime calls `.duplicate()` first or every
+  instance silently shares the change. `GAME_PLAN.md` and `DECISIONS.md` may quote a tuning
+  value, but the `.tres` is the source of truth and prose that disagrees with it is wrong.
+- **Status:** active
+
+### D-005 — {{title}}
 
 - **Date:**
 - **Decision:**
