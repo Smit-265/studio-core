@@ -32,15 +32,18 @@ studio-core/
 ├── .claude/
 │   ├── agents/               # planner, builder, reviewer, asset-pipeline
 │   ├── commands/             # design-game, design-milestone, plan-milestone,
-│   │                         # next-task, verify, session-end
+│   │                         # next-task, close-milestone, verify, session-end
 │   └── skills/               # game-design, godot-conventions, asset-import, state-files
 ├── config/
 │   └── budgets.yaml          # default asset thresholds; games override per-repo
 ├── scripts/                  # verify.sh, new-project.sh, check-budgets.py,
 │                             # check-licences.py, gen-manifest.py, session-report.sh,
 │                             # check-loaders.py, sync-loaders.sh, check-plan.py
+│                             # check-progress.py, layout.sh
 │                             # _resolve.sh, _sclib.py — sourced/imported, not run
-├── templates/                # state files, assets.yaml, budgets override, game CLAUDE.md
+│   └── hooks/                # guard.sh + guard.py — Claude Code hooks for game repos
+├── templates/                # state files, assets.yaml, budgets override, game CLAUDE.md,
+│                             # game-settings.json (hook wiring), git-hooks/pre-commit
 └── .github/workflows/        # verify.yml, build.yml
 ```
 
@@ -72,6 +75,8 @@ Then, in the new repo:
 2. `/design-milestone` — work out the first vertical slice and append it to the plan.
 3. `/plan-milestone` — decompose that milestone into task packets.
 4. `/next-task` — execute one packet at a time.
+5. `/close-milestone` — walk the exit criteria with the human, tick them, advance to the
+   next milestone. Then back to 2.
 
 Design runs in the main thread rather than as an agent, because it is a conversation and
 subagents cannot converse. Fill in `DECISIONS.md` as tool and asset-source choices come up;
@@ -101,9 +106,23 @@ source of truth is the YAML.
 
 `scripts/verify.sh [project-path]` is the gate. It runs the engine's headless compile and
 import check, catches script parse errors, runs unit tests if a framework is present, then
-`check-budgets.py` and `check-licences.py`. It exits non-zero on any failure and prints
-actionable messages. It degrades gracefully with a clear message if the engine is not
-installed or no project is present.
+`check-loaders.py`, `check-progress.py`, `check-budgets.py` and `check-licences.py`. It exits
+non-zero on any failure and prints actionable messages. It degrades gracefully with a clear
+message if the engine is not installed or no project is present.
+
+The per-script parse is **diff-scoped** when a packet is in progress: only `.gd` files changed
+since the packet's `base_sha` get their own `--check-only` launch, because one Godot start per
+script does not scale. The import pass still covers the whole tree. `--full` or `--strict`
+sweeps every script; CI uses `--strict`.
+
+`check-progress.py` holds the task packets in `PROGRESS.md` to their contract — exactly the
+declared fields, unique ids for the life of the repo, a clean queue, one in-progress slot, and
+`tools` drawn from `DECISIONS.md`. The packet is the unit of work the harness moves around, so
+its shape is a build check, not a matter of discipline.
+
+Every scaffolded game repo also gets a **git pre-commit hook** running `verify.sh --no-engine`
+— the script half, seconds, no engine — so a bad `assets.yaml` or a malformed packet is caught
+before it is committed. `SKIP_VERIFY=1` bypasses it once.
 
 Budget thresholds come from `config/budgets.yaml`, deep-merged with the game repo's own
 `config/budgets.yaml` if present. No script hardcodes a number.
@@ -124,13 +143,34 @@ CI runs the same script on push and PR via `.github/workflows/verify.yml`, on th
 That is the primary verification path and it consumes no Claude quota — prefer it to asking an
 agent whether something works.
 
+## Guards — the rules as hooks
+
+`CLAUDE.md` states the rules; an agent can still ignore prose. So the ones that matter most are
+also **Claude Code hooks**, wired into every game repo's `.claude/settings.json` (generated from
+`templates/game-settings.json` by the same machinery as the loaders, and drift-checked the same
+way). They run `scripts/hooks/guard.py` and refuse the tool call:
+
+| Guard | Event | Refuses |
+|---|---|---|
+| `scope` | `PreToolUse` Edit/Write | a write to a repo file outside the in-progress packet's `scope` (plus `PROGRESS.md`, and `assets.yaml` for asset packets) |
+| `sequential` | `PreToolUse` Agent | a second agent while one holds `.studio/agent.lock` |
+| `git-tree` | `PreToolUse` Bash | a `git` command whose cwd, or `-C`, is outside the game repo |
+| `stop-state` | `Stop` | ending with changed files but an untouched `PROGRESS.md` — once, then it lets go |
+
+No packet in progress means no scope to enforce, so the design stage and hand edits are
+untouched. A guard that cannot run (no Python, malformed input) allows and says so; it never
+wedges a session. `STUDIO_GUARD=off` in the environment disables all of them — a human's
+decision, made outside a session.
+
 ## The four agents
 
 No more will be added.
 
 - **planner** — decomposes a milestone into a task queue with acceptance criteria per task,
-  naming the tool or asset source for each from the approved list in `DECISIONS.md`. Writes
-  the queue to `PROGRESS.md`. Never writes code. Runs at milestone boundaries only.
+  naming the tool or asset source for each from the approved list in `DECISIONS.md`, and the
+  `agent` (builder or asset-pipeline) that will run it. Reads `scripts/layout.sh` output for
+  real path names, never the codebase. Writes the queue to `PROGRESS.md`. Never writes code.
+  Runs at milestone boundaries only.
 - **builder** — executes exactly one queued task within a narrow file scope. Runs `verify.sh`
   before declaring done. Never refactors beyond the task.
 - **reviewer** — reads diffs only, never the whole repo. Checks correctness, scope creep, and
@@ -151,6 +191,12 @@ This one is on you, not on the agent. Model selection happens at invocation, so 
 inside `CLAUDE.md` cannot act on it — by the time the model reads the rule, the choice is
 already made and already billed. It is therefore stated here and encoded as the declared model
 in each agent definition, not carried as a runtime rule.
+
+The planner declares `opus`: it runs once per milestone and its output shapes every packet that
+follows, which is the architecture-decision case. The other three declare `sonnet`. The
+reviewer runs on every packet and is the largest recurring spend; `haiku` there is worth
+measuring on trivial diffs (scope only `.tres` or assets), but is not the default until
+someone has compared its findings against sonnet's on a real milestone.
 
 ### How agents reach a game repo
 
@@ -181,6 +227,13 @@ Games track studio-core's head; there is no version pinning. The accepted conseq
 studio-core change can break an existing game repo — `verify.sh` is what catches it. Once a
 game ships, pin it by converting studio-core to a git submodule in that repo; the resolution
 order above already accommodates a submodule path via `$STUDIO_CORE`.
+
+### Session boundaries travel with the repo
+
+`session-report.sh --mark` writes a `**Session boundary:**` line into `PROGRESS.md` rather than
+a local file, so both machines of a two-person studio report the same window. Run it **before**
+the final commit of a session so the line is committed with the rest; `.studio/last-session`
+remains as a local fallback for a `PROGRESS.md` that predates the line.
 
 ### Versioning the harness
 

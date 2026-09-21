@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import re
 import sys
 from pathlib import Path, PurePosixPath
 
@@ -244,3 +245,95 @@ def rel_display(project: Path, path: Path) -> str:
         return path.relative_to(project).as_posix()
     except ValueError:
         return str(path)
+
+
+# --- PROGRESS.md ------------------------------------------------------------
+#
+# PROGRESS.md is markdown for people, but the packets in it are fenced YAML so
+# a script can read them without regex over prose. This is the one parser;
+# check-progress.py, the hook guards and session-report all go through it so
+# they cannot disagree about what "the in-progress packet" is.
+
+PACKET_FIELDS = ("id", "goal", "scope", "acceptance", "tools", "agent", "base_sha", "attempts")
+PACKET_AGENTS = ("builder", "asset-pipeline")
+
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+_FENCE = re.compile(r"^```ya?ml[ \t]*\n(.*?)^```[ \t]*$", re.MULTILINE | re.DOTALL)
+_TABLE_ID = re.compile(r"^\|\s*(T-\d+)\s*\|", re.MULTILINE)
+
+
+def _sections(text: str) -> dict[str, str]:
+    """Split on `## ` headings. Keys are lowercased heading text."""
+    out: dict[str, str] = {}
+    key = ""
+    buf: list[str] = []
+    for line in text.splitlines():
+        if line.startswith("## "):
+            if key:
+                out[key] = "\n".join(buf)
+            key = line[3:].strip().lower()
+            buf = []
+        else:
+            buf.append(line)
+    if key:
+        out[key] = "\n".join(buf)
+    return out
+
+
+def parse_progress(path: Path) -> dict:
+    """Return {"in_progress": [packet], "queue": [packet], "completed": [ids],
+    "raw_errors": [str], "sections": {name: text}}.
+
+    A packet is whatever safe_load gives back for one fenced block - normally a
+    dict. Malformed YAML is reported in raw_errors, not raised, so a checker can
+    say which block is broken rather than dying on the first one. HTML comments
+    are stripped first: the template keeps a worked example inside one. Blocks
+    still carrying `{{...}}` template prompts are counted, not parsed.
+    """
+    text = _HTML_COMMENT.sub("", path.read_text(encoding="utf-8"))
+    secs = _sections(text)
+    result: dict = {"in_progress": [], "queue": [], "completed": [],
+                    "placeholders": 0, "raw_errors": [], "sections": secs}
+
+    def blocks(section: str, dest: str) -> None:
+        body = secs.get(section, "")
+        for n, m in enumerate(_FENCE.finditer(body), 1):
+            if "{{" in m.group(1):
+                # Scaffold example still carrying template prompts. Not a packet.
+                result["placeholders"] += 1
+                continue
+            try:
+                data = yaml.safe_load(m.group(1))
+            except yaml.YAMLError as exc:
+                result["raw_errors"].append(f"{section}: block #{n} is not valid YAML: {exc}")
+                continue
+            result[dest].append(data)
+
+    blocks("in progress", "in_progress")
+    blocks("task queue", "queue")
+    result["completed"] = _TABLE_ID.findall(secs.get("completed", ""))
+    return result
+
+
+def is_placeholder(packet: object) -> bool:
+    """True for a scaffold example still carrying `{{...}}` prompts."""
+    return "{{" in str(packet)
+
+
+def packet_scope_allows(rel_path: str, scope: list) -> bool:
+    """Does a repo-relative path fall inside a packet's scope list?
+
+    An entry names a file exactly, or a directory (trailing slash or no
+    extension) whose contents are all in scope. Globs are honoured via
+    matches_any so a planner may write `scenes/ui/*.tscn` if it must.
+    """
+    rel = norm_asset_path(rel_path)
+    for entry in scope or []:
+        e = norm_asset_path(str(entry)).rstrip("/")
+        if not e:
+            continue
+        if rel == e or rel.startswith(e + "/"):
+            return True
+        if any(ch in e for ch in "*?[") and matches_any(rel, [e]):
+            return True
+    return False

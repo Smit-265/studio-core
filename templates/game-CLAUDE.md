@@ -20,6 +20,8 @@ which load only when needed, not here, which ships with every request.
 - Stay inside the task's file scope. Outside it is scope creep; stop and report.
 - Read state before acting; write `PROGRESS.md` before ending.
 - Escalate rather than guess on scope, architecture, new tools, or anything token-expensive.
+- The first four are also hooks (`.claude/settings.json`, D-005). A refused tool call is the
+  rule working — report it, do not route around it.
 
 ## State files
 

@@ -2,7 +2,7 @@
 name: planner
 description: Decomposes one milestone into an ordered queue of task packets with acceptance criteria. Runs at milestone boundaries only. Never writes code.
 tools: Read, Grep, Glob, Edit, Write
-model: sonnet
+model: opus
 ---
 
 # planner
@@ -23,10 +23,12 @@ packets in it is waste; if the queue is non-empty, stop and say so.
    not a planner guessing at it.
 3. `DECISIONS.md` — §1 approved tools, §2 approved asset sources, §5 architecture decisions.
 4. The `state-files` skill — the task packet shape is not optional.
+5. The output of `scripts/layout.sh <project>` — directory names and file counts, two levels
+   deep, no contents. Write `scope` paths from this, not from memory.
 
-Do not read the codebase to plan. If a packet cannot be written without knowing how something
-is currently implemented, that uncertainty belongs in the packet's `goal`, or it is a research
-task of its own.
+Do not read the codebase to plan. `layout.sh` is the whole map. If a packet cannot be written
+without knowing how something is currently implemented, that uncertainty belongs in the
+packet's `goal`, or it is a research task of its own.
 
 ## File scope
 
@@ -38,8 +40,9 @@ Proposing a change to any of those is an escalation to the human, not an edit.
 ## Write when finished
 
 The **Task queue** section of `PROGRESS.md`, replaced with ordered task packets in the exact
-shape given by the `state-files` skill: `id`, `goal`, `scope`, `acceptance`, `tools`,
-`base_sha: ""`, `attempts: 0`.
+shape given by the `state-files` skill: `id`, `goal`, `scope`, `acceptance`, `tools`, `agent`,
+`base_sha: ""`, `attempts: 0`. `check-progress.py` validates them; run
+`verify.sh --no-engine` once the queue is written and fix what it names.
 
 Rules for a good packet:
 
@@ -54,6 +57,9 @@ Rules for a good packet:
 - **`tools` names only what `DECISIONS.md` already approves.** A task needing an unapproved
   tool, dependency or asset source is blocked, not planned — record it under **Blockers** with
   what it needs.
+- **`agent` is `asset-pipeline` for sourcing work** — `scope` under `assets/` plus
+  `assets.yaml`, `acceptance` naming the licence and budget class. Wiring the asset into a
+  scene is a separate `builder` packet that comes after it in the queue.
 - Order the queue so each packet is independently completable. A packet that cannot start until
   a later one lands is mis-ordered.
 - Prefer more, smaller packets. A packet a builder can finish in one sitting costs far less

@@ -5,12 +5,15 @@
 #       --strict      missing Godot or a missing test runner becomes a failure
 #                     rather than a skip. CI uses this; a laptop usually does not.
 #       --no-engine   skip every Godot step (fast asset-only pass)
+#       --full        parse every .gd, not just those changed since the
+#                     in-progress packet's base_sha (implied by --strict)
 #       --quiet       less chatter, same exit code
 #
-# Runs, in order: engine import, GDScript parse, unit tests, manifest freshness,
-# licences, budgets, and a warning-only reconciliation of GAME_PLAN.md against
-# the budget config. Roughly 90% of verification lives here rather than in an
-# agent, because a script that costs nothing can run on every commit.
+# Runs, in order: engine import, GDScript parse, unit tests, loaders, task
+# packets, manifest freshness, licences, budgets, and a warning-only
+# reconciliation of GAME_PLAN.md against the budget config. Roughly 90% of
+# verification lives here rather than in an agent, because a script that costs
+# nothing can run on every commit.
 #
 # Also stamps the studio-core version and SHA it ran as into the game's
 # PROGRESS.md, so a game repo records which harness it was verified against.
@@ -24,14 +27,16 @@ SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_ARG=""
 STRICT=0
 NO_ENGINE=0
+FULL=0
 QUIET=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --strict)    STRICT=1 ;;
     --no-engine) NO_ENGINE=1 ;;
+    --full)      FULL=1 ;;
     --quiet)     QUIET=1 ;;
-    -h|--help)   sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)   sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)          printf 'error: unknown option %s (see --help)\n' "$1" >&2; exit 2 ;;
     *)           [ -n "$PROJECT_ARG" ] && { printf 'error: more than one project path given\n' >&2; exit 2; }
                  PROJECT_ARG="$1" ;;
@@ -171,9 +176,37 @@ if [ "$NO_ENGINE" -eq 0 ]; then
 
   # Per-file parse. The import pass catches most of this, but --check-only is
   # the unambiguous signal and it is what makes a deliberate syntax error fail.
+  #
+  # One Godot launch per script does not scale, so on a laptop with a packet
+  # in progress only the scripts changed since its base_sha are checked - the
+  # import pass above still covers the whole tree for cross-file breakage.
+  # --strict (CI) and --full always sweep everything.
+  parse_mode="full"
+  if [ "$STRICT" -eq 0 ] && [ "$FULL" -eq 0 ] && [ -f "$PROJECT/PROGRESS.md" ] \
+     && git -C "$PROJECT" rev-parse --git-dir >/dev/null 2>&1; then
+    base_sha=$(awk '
+      /^## In progress/ { sec=1; next }
+      /^## /            { sec=0 }
+      sec && /^base_sha:/ { gsub(/[" ]/, "", $2); print $2; exit }
+    ' "$PROJECT/PROGRESS.md" 2>/dev/null)
+    if [ -n "$base_sha" ] && git -C "$PROJECT" cat-file -e "$base_sha^{commit}" 2>/dev/null; then
+      parse_mode="diff"
+    fi
+  fi
+
+  if [ "$parse_mode" = "diff" ]; then
+    gd_list=$( { git -C "$PROJECT" diff --name-only --diff-filter=AM "$base_sha" -- '*.gd';
+                 git -C "$PROJECT" ls-files --others --exclude-standard -- '*.gd'; } 2>/dev/null \
+               | grep -v '^addons/' | sort -u | sed "s|^|$PROJECT/|" )
+    sc_info "diff-scoped parse against base_sha ${base_sha:0:7} (--full for every script)"
+  else
+    gd_list=$(find "$PROJECT" -name '*.gd' -not -path '*/.git/*' -not -path '*/addons/*' 2>/dev/null)
+  fi
+
   parse_failed=0
   gd_count=0
   while IFS= read -r gd; do
+    [ -n "$gd" ] && [ -f "$gd" ] || continue
     gd_count=$((gd_count + 1))
     rel=${gd#"$PROJECT/"}
     out=$("$GODOT" --headless --path "$PROJECT" --check-only --script "res://$rel" 2>&1)
@@ -183,15 +216,19 @@ if [ "$NO_ENGINE" -eq 0 ]; then
       printf '%s\n' "$out" | grep -E 'Parse Error|SCRIPT ERROR|error' | head -5 | sed 's/^/        /'
       parse_failed=$((parse_failed + 1))
     fi
-  done < <(find "$PROJECT" -name '*.gd' -not -path '*/.git/*' -not -path '*/addons/*' 2>/dev/null)
+  done <<< "$gd_list"
 
   if [ "$gd_count" -eq 0 ]; then
-    sc_skip "no .gd files outside addons/"
+    if [ "$parse_mode" = "diff" ]; then
+      sc_ok "no .gd files changed since base_sha"
+    else
+      sc_skip "no .gd files outside addons/"
+    fi
   elif [ "$parse_failed" -gt 0 ]; then
     sc_info "$parse_failed of $gd_count script(s) failed to parse"
     step_failed
   else
-    sc_ok "$gd_count script(s) parse"
+    sc_ok "$gd_count script(s) parse ($parse_mode)"
   fi
 fi
 
@@ -225,6 +262,15 @@ sc_require_python
 sc_section "loaders"
 $SC_PYTHON "$SC_SCRIPTS/check-loaders.py" "$PROJECT" || step_failed
 
+# The packet contract, mechanically. Strict in CI so a warning a human may
+# have meant to leave (attempts 2, empty base_sha) is not silently green.
+sc_section "progress"
+if [ "$STRICT" -eq 1 ]; then
+  $SC_PYTHON "$SC_SCRIPTS/check-progress.py" "$PROJECT" --strict || step_failed
+else
+  $SC_PYTHON "$SC_SCRIPTS/check-progress.py" "$PROJECT" || step_failed
+fi
+
 sc_section "manifest"
 if [ -f "$PROJECT/assets.yaml" ]; then
   if $SC_PYTHON "$SC_SCRIPTS/gen-manifest.py" "$PROJECT" --check; then
@@ -240,7 +286,11 @@ sc_section "licences"
 $SC_PYTHON "$SC_SCRIPTS/check-licences.py" "$PROJECT" || step_failed
 
 sc_section "budgets"
-$SC_PYTHON "$SC_SCRIPTS/check-budgets.py" "$PROJECT" || step_failed
+if [ "$STRICT" -eq 1 ]; then
+  $SC_PYTHON "$SC_SCRIPTS/check-budgets.py" "$PROJECT" --strict || step_failed
+else
+  $SC_PYTHON "$SC_SCRIPTS/check-budgets.py" "$PROJECT" || step_failed
+fi
 
 # Prose vs enforced config. Deliberately not gated: GAME_PLAN.md §3 is written
 # with a human during design, and a hard fail on prose would fire on phrasing

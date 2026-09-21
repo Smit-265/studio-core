@@ -9,6 +9,7 @@
 
 **Last updated:** {{DATE}} · **Updated by:** {{agent or human}}
 **Harness:** _not yet recorded — run `verify.sh`_
+**Session boundary:** _not yet marked — `session-report.sh --mark` at session end_
 
 ---
 
@@ -40,6 +41,7 @@ acceptance:
   - Pressing ui_cancel toggles the menu and sets get_tree().paused
   - verify.sh exits 0
 tools: []
+agent: builder
 base_sha: 4f2a1c9e8b7d6a5c4b3a2918f7e6d5c4b3a29187
 attempts: 1
 ```
@@ -52,6 +54,7 @@ attempts: 1
 Ordered; the top packet is next. Every entry is a task packet — the same shape the builder
 consumes, with `base_sha: ""` and `attempts: 0` until a builder picks it up. A task that will
 not fit this shape was decomposed badly; say so rather than writing prose instead.
+`check-progress.py` validates every packet inside `verify.sh`.
 
 ```yaml
 id: T-001
@@ -62,6 +65,7 @@ acceptance:
   - {{observable outcome a script or a human can check}}
   - verify.sh exits 0
 tools: []
+agent: builder                 # builder | asset-pipeline — who /next-task delegates to
 base_sha: ""
 attempts: 0
 ```
@@ -75,6 +79,7 @@ acceptance:
   - {{outcome}}
   - verify.sh exits 0
 tools: []
+agent: builder
 base_sha: ""
 attempts: 0
 ```

@@ -38,11 +38,14 @@ acceptance:                    # how verify PROVES it done - observable, not "lo
   - Pressing ui_cancel toggles the menu and sets get_tree().paused
   - verify.sh exits 0
 tools: []                      # names drawn ONLY from DECISIONS.md §1/§2. [] means none.
+agent: builder                 # builder | asset-pipeline. Who /next-task delegates to.
 base_sha: ""                   # empty until a builder starts. Then HEAD at that moment.
 attempts: 0                    # incremented on each verify.sh failure. Never reset.
 ```
 
-Seven fields. No more, no fewer, no free-text additions.
+Eight fields. No more, no fewer, no free-text additions. `check-progress.py` enforces this
+inside `verify.sh`: field set, unique ids, clean queue, approved `tools`, one in-progress slot.
+`agent` is `asset-pipeline` when `scope` is under `assets/` plus `assets.yaml`; else `builder`.
 
 **If a task will not fit this shape, the planner decomposed it badly.** Say so and re-decompose.
 Do not write prose in place of a packet, and do not smuggle detail into `goal` as a paragraph.
@@ -74,25 +77,29 @@ This field, not the conversation, is what the **two-strike rule** reads:
 `attempts` returns to `0` in exactly one circumstance: **a human amends the packet's `goal`,
 `scope` or `acceptance`.** The task changed, so the count against the old task no longer applies.
 
-It does **not** reset on a session boundary, on a retry, on a rebase, or because an agent judged
-the earlier failures unrelated. No agent resets it under any circumstance.
-
-Amending a packet **without** resetting is equally valid and means the human wants the count
-carried — typically when the amendment is a clarification rather than a change of task. The
-human decides which; an agent that finds an amended packet still at `attempts: 2` treats it as
-`attempts: 2`.
+It does **not** reset on a session boundary, a retry, a rebase, or because an agent judged the
+earlier failures unrelated. No agent resets it. A human may amend a packet **without** resetting
+— a clarification, not a new task — and an agent finding `attempts: 2` treats it as 2.
 
 ---
 
 ## Reviewer diff base
 
 The reviewer diffs **`base_sha..HEAD`, and nothing else.** Not the working tree, not the whole
-repo, not `HEAD~1`.
+repo, not `HEAD~1`. **If `base_sha` is empty or missing, the reviewer stops and reports** — a
+missing base means the builder skipped a step; a guessed base reviews unrelated commits.
 
-**If `base_sha` is empty or missing, the reviewer stops and reports.** It does not guess a base,
-substitute `HEAD~1`, or review the working tree instead. A missing `base_sha` means the builder
-skipped a step, and that is worth surfacing rather than papering over — a wrong base produces a
-review of unrelated commits, which is worse than no review.
+### After a reviewer FAIL
+
+`attempts` counts `verify.sh` failures only; a reviewer FAIL does not touch it. The packet is
+already in **Completed** with its commit. The human chooses one of:
+
+- **Fix packet.** Queue a new packet (new id) whose `goal` is the finding and whose `scope` is
+  the files it names. `base_sha` is stamped fresh. This is the default.
+- **Accept.** Findings were warnings or a recorded decision; nothing to do.
+- **Revert.** `git revert <commit>`, then re-queue the original goal under a new id.
+
+No agent picks; `/next-task` reports and stops.
 
 ---
 
@@ -135,4 +142,5 @@ to `check-licences.py`. Field-level rules are in the `asset-import` skill.
 2. Move anything finished to **Completed**.
 3. Record new blockers; delete resolved ones.
 4. Write **Notes for next session** — only what the packets do not already say.
-5. Commit, then `session-report.sh --mark` to set the next session's boundary.
+5. `session-report.sh --mark` — writes the `**Session boundary:**` line into `PROGRESS.md` —
+   **then** commit, so the marker travels with the repo to the other machine.

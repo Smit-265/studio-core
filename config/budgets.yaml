@@ -119,6 +119,8 @@ files:
     font: 2
     shader: 1
   extensions:
+    # Triangles are counted in .glb, .gltf and .obj only. The rest are accepted
+    # as models but warn as uncounted, and that warning fails under --strict.
     model: [".glb", ".gltf", ".obj", ".fbx", ".blend", ".dae"]
     texture: [".png", ".jpg", ".jpeg", ".webp", ".exr", ".hdr", ".ktx2"]
     material: [".tres", ".material"]

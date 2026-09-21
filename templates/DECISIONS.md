@@ -171,7 +171,26 @@ Newest last. One entry per decision. Keep each under ten lines — this file is 
   value, but the `.tres` is the source of truth and prose that disagrees with it is wrong.
 - **Status:** active
 
-### D-005 — {{title}}
+### D-005 — Harness rules are enforced by hooks, not by prose alone
+
+- **Date:** {{DATE}}
+- **Decision:** The rules in studio-core's `CLAUDE.md` that most often fail under pressure —
+  stay inside the packet's `scope`, one agent at a time, git rooted in this repo, write
+  `PROGRESS.md` before ending — are also Claude Code hooks in `.claude/settings.json`, generated
+  from studio-core alongside the loaders and drift-checked by `check-loaders.py`. A refused tool
+  call is reported, not worked around. `STUDIO_GUARD=off` disables them and is a human's call.
+- **Rationale:** Deterministic-first applies to the harness itself. Prose is advice; a hook is a
+  gate. The guards cost nothing to run and turn the two most expensive failure modes — scope
+  creep and a session that ends without state — from discipline into mechanism.
+- **Alternatives rejected:** *Prose only* because it was the status quo and it relies on the
+  agent reading and obeying every time. *Per-game hook edits* because hook wiring is not game
+  content; it forks like a copied agent would.
+- **Consequences:** The packet must be in **In progress** with its `scope` saved before an agent
+  edits anything, or the scope guard has nothing to enforce. `.studio/` holds the agent lock and
+  session snapshot and stays gitignored. A guard that cannot run allows and says so.
+- **Status:** active
+
+### D-006 — {{title}}
 
 - **Date:**
 - **Decision:**

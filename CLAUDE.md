@@ -55,9 +55,10 @@ fails `check-budgets.py` at exit 2 and is unreadable from Godot at runtime. See 
 studio-core itself is found via `$STUDIO_CORE`, else the sibling directory `../studio-core`.
 
 Work is carried in **task packets** — one YAML shape, written by planner and consumed by
-builder, identical in the queue and in the in-progress slot. Fields: `id`, `goal`, `scope`,
-`acceptance`, `tools`, `base_sha`, `attempts`. Work that will not fit the shape was decomposed
-badly; say so rather than writing prose instead. Full rules: `state-files` skill.
+builder or asset-pipeline, identical in the queue and in the in-progress slot. Fields: `id`,
+`goal`, `scope`, `acceptance`, `tools`, `agent`, `base_sha`, `attempts`. Work that will not fit
+the shape was decomposed badly; say so rather than writing prose instead. `check-progress.py`
+validates every packet inside `verify.sh`. Full rules: `state-files` skill.
 
 **Read state before acting.** At session start, read `PROGRESS.md` first, then `DECISIONS.md`
 if the task involves tool or architecture choices. Reconstruct context from these files and
@@ -69,6 +70,14 @@ because the next session cannot resume cheaply.
 
 Exact formats and update rules are in the `state-files` skill. Load it before writing state
 for the first time in a session.
+
+## Guards
+
+The rules above are also **hooks** in every game repo (`.claude/settings.json`, generated from
+studio-core): an `Edit`/`Write` outside the in-progress packet's `scope` is refused; a second
+concurrent agent is refused; `git` rooted outside the game repo is refused; ending a session
+with changes but an untouched `PROGRESS.md` is refused once. A refusal is the rule working —
+report it, do not route around it. `STUDIO_GUARD=off` is a human's decision, outside a session.
 
 ## Agents
 
@@ -100,8 +109,11 @@ Run these instead of reasoning about correctness.
 - `scripts/gen-manifest.py` — regenerates `ASSET_MANIFEST.md` from `assets.yaml`.
 - `scripts/check-plan.py` — warns when `GAME_PLAN.md` §3 states a limit the merged budget
   config does not enforce. Warning-only; always exits 0.
+- `scripts/check-progress.py` — task packets honour the contract. Runs inside `verify.sh`.
+- `scripts/layout.sh` — directory shape and script/scene names, for the planner's `scope`.
 - `scripts/new-project.sh <name>` — scaffold a new game repo.
 - `scripts/session-report.sh` — git activity since last session, for cheap resume.
+  `--mark` writes the boundary into `PROGRESS.md`; run it **before** the final commit.
 
 ## Escalation
 

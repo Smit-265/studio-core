@@ -60,6 +60,10 @@ exists to avoid.
    explicitly; do not bikeshed formatting the parser accepts.
 5. **Leftovers.** Debug prints, commented-out code, TODOs with no owner, `.res` where `.tres`
    belongs, hand-edited `ASSET_MANIFEST.md`.
+6. **Asset packets** (`agent: asset-pipeline`): every new file under `assets/` has an
+   `assets.yaml` entry in the same diff with a real licence and a `source_url` to the asset's
+   own page; the `.import` sits beside it; `ASSET_MANIFEST.md` changed only via the generator
+   (its fingerprint line moved). No scene or script changed.
 
 ## Output
 

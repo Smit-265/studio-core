@@ -23,9 +23,11 @@ cannot reconstruct state without re-reading the codebase.
 
 5. **Update the `Last updated` line.**
 
-6. **Commit**, then mark the boundary:
+6. **Mark the boundary, then commit** — in that order, so the marker line lands in the commit
+   and the other machine sees the same boundary:
    ```sh
    "${STUDIO_CORE:-../studio-core}/scripts/session-report.sh" . --mark
+   git add -A && git commit -m "chore: session end"
    ```
 
 Report: what was completed, what is in flight with its `attempts` count, open blockers, and the

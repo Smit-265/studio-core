@@ -297,8 +297,12 @@ def check_one(rel: str, project: Path, cfg: dict, overrides: dict, rep: Report,
         budget = cfg["geometry"]["triangles"].get(cls)
         tris = triangle_count(abs_path)
         if tris is None:
+            # A warning on a laptop, a failure in CI (--strict): an uncounted
+            # mesh is an unenforced budget, and silence is the failure mode
+            # the whole budget check exists to prevent.
             rep.warn(f"{rel}: cannot count triangles in {abs_path.suffix} - budget "
-                     f"({cls}: {budget}) not enforced. Export to .glb to have it checked.")
+                     f"({cls}: {budget}) not enforced. Export to .glb to have it checked; "
+                     "this fails under --strict.")
         elif budget is None:
             rep.error(f"{rel}: classified as {cls!r} which has no geometry.triangles budget.")
         else:

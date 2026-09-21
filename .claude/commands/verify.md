@@ -1,6 +1,6 @@
 ---
 description: Run the verification gate (engine import, GDScript parse, tests, manifest, licences, budgets)
-argument-hint: "[project path — defaults to cwd] [--strict] [--no-engine]"
+argument-hint: "[project path — defaults to cwd] [--strict] [--no-engine] [--full]"
 allowed-tools: Bash, Read
 ---
 

@@ -6,15 +6,18 @@
 #       --since REF   git ref or date to report from. Default: the marker
 #                     recorded by the last --mark, else the last 7 days.
 #       --mark        record HEAD as the session boundary and exit. Run this at
-#                     session end, after committing.
+#                     session end, BEFORE the final commit, so the line it
+#                     writes into PROGRESS.md is committed with the rest.
 #       --full        include per-file churn, not just the summary
 #
 # Exists so a new session can reconstruct state by reading, not by re-reading
 # the codebase. Output is deliberately compact: it is going into a context
 # window that costs money.
 #
-# The marker lives in .studio/last-session, which is gitignored - it is local
-# bookkeeping, not project state. Project state is PROGRESS.md.
+# The marker is the `**Session boundary:**` line in PROGRESS.md, so it is
+# committed and both machines of a two-person studio see the same window.
+# .studio/last-session is kept as a local fallback for a PROGRESS.md that
+# predates the line.
 #
 # Exit: 0 always, unless the project path is wrong (2).
 
@@ -54,16 +57,46 @@ git rev-parse --git-dir >/dev/null 2>&1 || sc_die "$PROJECT is not a git reposit
 MARKER_DIR="$PROJECT/.studio"
 MARKER="$MARKER_DIR/last-session"
 
+# Write or replace the boundary line in PROGRESS.md. Placed after **Harness:**
+# (or **Last updated:**) so the header block stays the one place a resuming
+# session looks. Returns 1 when neither anchor exists.
+sc_mark_progress() {
+  local f="$1" sha="$2" line tmp
+  line="**Session boundary:** \`$sha\` · marked $(date +%Y-%m-%d) by \`session-report.sh --mark\`"
+  tmp=$(mktemp) || return 1
+  if grep -q '^\*\*Session boundary:\*\*' "$f"; then
+    MARKLINE="$line" awk '/^\*\*Session boundary:\*\*/ && !d { print ENVIRON["MARKLINE"]; d=1; next } { print }' "$f" > "$tmp"
+  elif grep -q '^\*\*Harness:\*\*' "$f"; then
+    MARKLINE="$line" awk '{ print } /^\*\*Harness:\*\*/ && !d { print ENVIRON["MARKLINE"]; d=1 }' "$f" > "$tmp"
+  elif grep -q '^\*\*Last updated:\*\*' "$f"; then
+    MARKLINE="$line" awk '{ print } /^\*\*Last updated:\*\*/ && !d { print ENVIRON["MARKLINE"]; d=1 }' "$f" > "$tmp"
+  else
+    rm -f "$tmp"; return 1
+  fi
+  cat "$tmp" > "$f" && rm -f "$tmp"
+}
+
 if [ "$MARK" -eq 1 ]; then
+  HEAD_SHA=$(git rev-parse HEAD 2>/dev/null) || sc_die "no commits yet - nothing to mark"
   mkdir -p "$MARKER_DIR"
-  git rev-parse HEAD > "$MARKER" 2>/dev/null || sc_die "no commits yet - nothing to mark"
-  printf 'session marked at %s\n' "$(git log -1 --format='%h %s')"
+  printf '%s\n' "$HEAD_SHA" > "$MARKER"
+  if [ -f "$PROJECT/PROGRESS.md" ] && sc_mark_progress "$PROJECT/PROGRESS.md" "$HEAD_SHA"; then
+    printf 'session marked at %s - boundary line written to PROGRESS.md; commit it\n' \
+      "$(git log -1 --format='%h %s')"
+  else
+    sc_warn "PROGRESS.md has no header line to anchor on - marker kept locally only"
+    printf 'session marked at %s\n' "$(git log -1 --format='%h %s')"
+  fi
   exit 0
 fi
 
-# Resolve the reporting window.
-if [ -z "$SINCE" ] && [ -f "$MARKER" ]; then
-  candidate=$(tr -d '[:space:]' < "$MARKER")
+# Resolve the reporting window: PROGRESS.md line first, local file second.
+candidate=""
+if [ -z "$SINCE" ]; then
+  candidate=$(sed -n 's/^\*\*Session boundary:\*\* *`\([0-9a-f]\{7,40\}\)`.*/\1/p' "$PROJECT/PROGRESS.md" 2>/dev/null | head -1)
+  [ -n "$candidate" ] || { [ -f "$MARKER" ] && candidate=$(tr -d '[:space:]' < "$MARKER"); }
+fi
+if [ -z "$SINCE" ] && [ -n "$candidate" ]; then
   if git cat-file -e "$candidate^{commit}" 2>/dev/null; then
     SINCE="$candidate"
     WINDOW="since last marked session ($(git rev-parse --short "$SINCE"))"
@@ -152,8 +185,7 @@ if [ -f "$PROJECT/PROGRESS.md" ]; then
     /^## In progress/       { sec="inprog"; print "  in progress:"; next }
     /^## Blockers/          { sec="block";  print "  blockers:";    next }
     /^## /                  { sec="";                                next }
-    sec=="inprog" && /^###/ { print "    " $0 }
-    sec=="inprog" && /^- \*\*(State|Next step)/ { print "    " $0 }
+    sec=="inprog" && /^(id|goal|agent|attempts|base_sha):/ { print "    " $0 }
     sec=="inprog" && /^none$/ { print "    none" }
     sec=="block"  && /^\| [0-9]/ { print "    " $0 }
   ' "$PROJECT/PROGRESS.md"

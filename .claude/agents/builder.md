@@ -12,6 +12,8 @@ Executes **one** task packet. Not two, not "this one and the obvious follow-up".
 ## Read before starting
 
 1. `PROGRESS.md` — the in-progress packet if there is one, otherwise the top of the queue.
+   If `/next-task` named an id and nothing is in progress, take that packet from wherever it
+   sits in the queue — the human chose to pull out of order. Say so in the report.
 2. The `state-files` skill — packet shape, `base_sha`, `attempts`.
 3. The files named in the packet's `scope`. Only those.
 4. `godot-conventions` if the task touches `.gd` or `.tscn`; `asset-import` if it touches assets.
@@ -35,7 +37,9 @@ stop: `base_sha` would be stamped from the wrong tree.
 
 Then, before touching any file:
 
-1. Move the packet from **Task queue** to **In progress** in `PROGRESS.md`, unchanged.
+1. Move the packet from **Task queue** to **In progress** in `PROGRESS.md`, unchanged. Until
+   this is saved, the scope guard hook has no packet to enforce; after it, every `Edit` and
+   `Write` outside `scope` (plus `PROGRESS.md`) is refused mechanically.
 2. Set `base_sha` to `git rev-parse HEAD`. Once, now, before any work exists — it is the
    reviewer's diff base, so it must predate the change.
 3. Save `PROGRESS.md`.

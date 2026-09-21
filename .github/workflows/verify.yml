@@ -53,6 +53,46 @@ jobs:
       - name: verify.sh degrades gracefully with no project present
         run: ./scripts/verify.sh . --no-engine
 
+      - name: hook wiring is valid JSON and names every guard
+        run: |
+          python - <<'PY'
+          import json
+          text = json.dumps(json.load(open("templates/game-settings.json")))
+          need = ["scope", "sequential", "agent-done", "git-tree", "session-start", "stop-state"]
+          missing = [g for g in need if f"guard.sh\\\" {g}" not in text]
+          assert not missing, f"settings.json does not wire: {missing}"
+          print("guards wired:", need)
+          PY
+
+      - name: guard.py allows on garbage input and blocks a scope breach
+        run: |
+          echo 'not json' | python scripts/hooks/guard.py scope || { echo "::error::garbage input blocked"; exit 1; }
+          tmp=$(mktemp -d)
+          cat > "$tmp/PROGRESS.md" <<'MD'
+          # P
+          **Last updated:** x
+          ## In progress
+          ```yaml
+          id: T-001
+          goal: g
+          scope: [scripts/a.gd]
+          acceptance: [verify.sh exits 0]
+          tools: []
+          agent: builder
+          base_sha: ""
+          attempts: 0
+          ```
+          ## Task queue
+          MD
+          export CLAUDE_PROJECT_DIR="$tmp"
+          ok="{\"cwd\":\"$tmp\",\"tool_input\":{\"file_path\":\"$tmp/scripts/a.gd\"}}"
+          bad="{\"cwd\":\"$tmp\",\"tool_input\":{\"file_path\":\"$tmp/scripts/b.gd\"}}"
+          echo "$ok" | python scripts/hooks/guard.py scope || { echo "::error::in-scope write was blocked"; exit 1; }
+          if echo "$bad" | python scripts/hooks/guard.py scope; then
+            echo "::error::out-of-scope write was allowed"; exit 1
+          fi
+          echo "scope guard held"
+
   dogfood:
     name: dogfood (scaffold and verify a game repo)
     runs-on: ubuntu-latest
@@ -126,6 +166,29 @@ jobs:
           echo "ship-blocker held: check-licences.py exited non-zero"
           rm game-dogfood/assets/props/orphan.png
 
+      - name: check-progress.py FAILS on a malformed packet
+        run: |
+          cp game-dogfood/PROGRESS.md /tmp/PROGRESS.bak
+          printf '\n## Task queue\n\n```yaml\nid: T-9\ngoal: bad\nscope: []\nacceptance: []\ntools: []\nagent: nobody\nbase_sha: \"\"\nattempts: 0\n```\n' >> game-dogfood/PROGRESS.md
+          if python ./studio-core/scripts/check-progress.py ./game-dogfood; then
+            echo "::error::check-progress.py exited 0 on a malformed packet"
+            exit 1
+          fi
+          echo "packet contract held"
+          cp /tmp/PROGRESS.bak game-dogfood/PROGRESS.md
+
+      - name: pre-commit hook rejects a commit that fails verify
+        run: |
+          cd game-dogfood
+          test -x .git/hooks/pre-commit || { echo "::error::pre-commit hook not installed"; exit 1; }
+          printf '\n## Task queue\n\n```yaml\nid: T-9\ngoal: bad\nscope: []\nacceptance: []\ntools: []\nagent: nobody\nbase_sha: \"\"\nattempts: 0\n```\n' >> PROGRESS.md
+          git add -A
+          if git commit -q -m "should be rejected"; then
+            echo "::error::pre-commit let a failing verify through"; exit 1
+          fi
+          git reset -q; git checkout -q -- PROGRESS.md
+          echo "pre-commit held"
+
       - name: check-loaders.py FAILS on a drifted loader
         run: |
           printf '\nlocal edit that does not belong in a loader\n' \
@@ -135,5 +198,15 @@ jobs:
             exit 1
           fi
           echo "drift detected"
+          ./studio-core/scripts/sync-loaders.sh ./game-dogfood
+          python ./studio-core/scripts/check-loaders.py ./game-dogfood
+
+      - name: check-loaders.py FAILS on drifted hook wiring
+        run: |
+          echo >> game-dogfood/.claude/settings.json
+          if python ./studio-core/scripts/check-loaders.py ./game-dogfood; then
+            echo "::error::check-loaders.py exited 0 on drifted settings.json"
+            exit 1
+          fi
           ./studio-core/scripts/sync-loaders.sh ./game-dogfood
           python ./studio-core/scripts/check-loaders.py ./game-dogfood

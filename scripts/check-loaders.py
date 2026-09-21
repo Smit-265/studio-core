@@ -13,7 +13,8 @@ Copies fork, so drift is the one real risk. This makes drift a build failure:
       --quiet     only print failures
 
 Checks: every studio-core definition has a loader | no loader without a source |
-frontmatter matches the source | body is the canonical loader body.
+frontmatter matches the source | body is the canonical loader body |
+.claude/settings.json (the hook wiring) matches templates/game-settings.json.
 
 Generation and checking share one renderer below, so the two cannot disagree.
 
@@ -40,6 +41,12 @@ from _sclib import (  # noqa: E402
 # selection happens at invocation, before anything reads the definition, so it
 # cannot be deferred upstream the way behaviour can.
 FRONTMATTER_KEYS = ("name", "description", "tools", "model", "argument-hint", "allowed-tools")
+
+# The hook wiring travels with the loaders: same generator, same drift check,
+# so a game repo cannot quietly run without the guards. Source of truth is
+# templates/game-settings.json; the file is copied byte-for-byte.
+SETTINGS_REL = ".claude/settings.json"
+SETTINGS_SRC = "templates/game-settings.json"
 
 
 def split_frontmatter(text: str, where: str) -> tuple[dict, str]:
@@ -175,6 +182,23 @@ def main() -> int:
                       "behaviour; move the content upstream to studio-core and run "
                       "sync-loaders.sh.")
 
+    # Hook wiring, held to the same standard as a loader.
+    settings_src = studio_core / SETTINGS_SRC
+    settings_dst = project / SETTINGS_REL
+    if settings_src.is_file():
+        expected = settings_src.read_text(encoding="utf-8")
+        if args.write:
+            settings_dst.parent.mkdir(parents=True, exist_ok=True)
+            if not settings_dst.is_file() or settings_dst.read_text(encoding="utf-8") != expected:
+                settings_dst.write_text(expected, encoding="utf-8", newline="\n")
+                written += 1
+        elif not settings_dst.is_file():
+            rep.error(f"{SETTINGS_REL}: missing. It wires the hook guards (scope, sequential, "
+                      "git-tree, stop-state). Run sync-loaders.sh.")
+        elif settings_dst.read_text(encoding="utf-8") != expected:
+            rep.error(f"{SETTINGS_REL}: differs from studio-core's {SETTINGS_SRC}. Hook wiring "
+                      "is not per-game; change it upstream and run sync-loaders.sh.")
+
     # Extra loaders: present here, defined nowhere upstream.
     claude_dir = project / ".claude"
     if claude_dir.is_dir():
@@ -186,8 +210,9 @@ def main() -> int:
                           "sync-loaders.sh.")
 
     if args.write:
+        total = len(sources) + (1 if settings_src.is_file() else 0)
         print(f"{green('loaders: synced')} - {written} written, "
-              f"{len(sources) - written} already current")
+              f"{total - written} already current")
         return EXIT_OK
 
     return rep.finish(f"{len(sources)} loader(s) match studio-core")

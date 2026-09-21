@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# pre-commit - the cheap half of verify.sh before every commit.
+#
+# Installed by studio-core/new-project.sh into .git/hooks/. Runs the script
+# checks only (loaders, packets, manifest, licences, budgets) - seconds, no
+# engine - so a bad assets.yaml or a malformed packet is caught here rather
+# than in CI. The engine steps still run in verify.sh proper and in CI.
+#
+# Skip once with:   SKIP_VERIFY=1 git commit ...
+# Remove for good:  rm .git/hooks/pre-commit
+
+[ -n "${SKIP_VERIFY:-}" ] && exit 0
+
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+SC="${STUDIO_CORE:-$ROOT/../studio-core}"
+[ -x "$SC/scripts/verify.sh" ] || {
+  printf 'pre-commit: studio-core not found at %s - skipping verify\n' "$SC" >&2
+  exit 0
+}
+
+if ! "$SC/scripts/verify.sh" "$ROOT" --no-engine --quiet; then
+  printf '\npre-commit: verify.sh failed. Fix it, or SKIP_VERIFY=1 to commit anyway.\n' >&2
+  exit 1
+fi

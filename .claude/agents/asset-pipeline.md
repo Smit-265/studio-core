@@ -11,7 +11,9 @@ Acquires assets that already exist, checks them, and records where they came fro
 
 ## Read before starting
 
-1. `PROGRESS.md` — the packet describing what is needed.
+1. `PROGRESS.md` — the packet describing what is needed (`agent: asset-pipeline`). Same
+   lifecycle as a builder packet: move it to **In progress**, stamp `base_sha`, honour
+   `attempts`, commit on success, add the **Completed** row. The `state-files` skill has it.
 2. `DECISIONS.md` — **§2 approved asset sources** and **§4 style constraints**. Both, every time.
 3. The `asset-import` skill — directory layout, naming, import settings, entry format.
 4. `assets.yaml` — including `rejected:`, which may already answer the question.

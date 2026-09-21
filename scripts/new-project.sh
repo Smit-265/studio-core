@@ -119,6 +119,10 @@ STUDIO_CORE=$STUDIO_CORE
 
 # Optional: path to the Godot 4.x executable, if it is not on PATH as \`godot\`.
 #GODOT_BIN=
+
+# Set to \`off\` to disable the Claude Code hook guards (scope, sequential, git-tree,
+# stop-state). A human decision, made outside a session. See DECISIONS.md D-005.
+#STUDIO_GUARD=
 EOF
 sc_ok ".env.example"
 
@@ -145,14 +149,14 @@ cp "$STUDIO_CORE/.gitattributes" "$TARGET/.gitattributes" 2>/dev/null || true
 # nothing to import and verify.sh can only ever skip its main step.
 cat > "$TARGET/project.godot" <<EOF
 ; Engine configuration for game-$NAME. Scaffolded by studio-core/new-project.sh.
-; Set config/features to the Godot version this project targets.
+; config/features matches the pinned engine (DECISIONS.md D-002). Bump both together.
 
 config_version=5
 
 [application]
 
 config/name="game-$NAME"
-config/features=PackedStringArray("4.3")
+config/features=PackedStringArray("4.7")
 
 [rendering]
 
@@ -216,6 +220,13 @@ if [ "$DO_GIT" -eq 1 ] && sc_have git; then
   (
     cd "$TARGET" || exit 1
     git init -q -b main >/dev/null 2>&1 || git init -q >/dev/null 2>&1
+    # Local pre-commit: the script half of verify.sh, seconds, no engine.
+    if [ -f "$TEMPLATES/git-hooks/pre-commit" ] && [ -d .git/hooks ]; then
+      cp "$TEMPLATES/git-hooks/pre-commit" .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+    fi
+    # Stamp the harness into PROGRESS.md before the first commit so the
+    # scaffold commit already records what it was verified against.
+    "$SC_SCRIPTS/verify.sh" "$TARGET" --no-engine --quiet >/dev/null 2>&1 || true
     git add -A >/dev/null 2>&1
     if git -c advice.detachedHead=false commit -q -m "chore: scaffold game-$NAME from studio-core" >/dev/null 2>&1; then
       exit 0
@@ -223,7 +234,7 @@ if [ "$DO_GIT" -eq 1 ] && sc_have git; then
     exit 3
   )
   case $? in
-    0) sc_ok "git repo initialised with an initial commit" ;;
+    0) sc_ok "git repo initialised with an initial commit; pre-commit hook runs verify.sh --no-engine" ;;
     3) sc_warn "git repo initialised but the commit failed - set user.name and user.email, then commit" ;;
     *) sc_warn "git init failed; the files are all there, version them yourself" ;;
   esac
@@ -246,7 +257,7 @@ cat <<EOF
   3. /next-task             - execute one packet at a time
   4. Verify any time:       $STUDIO_CORE/scripts/verify.sh "$TARGET"
 
-  DECISIONS.md already carries D-001 to D-003. Add approved tools and asset
+  DECISIONS.md already carries D-001 to D-005. Add approved tools and asset
   sources there before the asset-pipeline needs them.
 
   studio-core resolves as $SC_PATH_NOTE from this repo.
