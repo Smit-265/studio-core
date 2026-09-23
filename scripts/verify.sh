@@ -203,6 +203,19 @@ if [ "$NO_ENGINE" -eq 0 ]; then
     gd_list=$(find "$PROJECT" -name '*.gd' -not -path '*/.git/*' -not -path '*/addons/*' 2>/dev/null)
   fi
 
+  # --check-only --script does not boot the scene tree, so autoload singletons
+  # are unknown to the analyzer and any script naming one fails with
+  # "Identifier not found: <Autoload>" - as does any script that statically
+  # types against one of those, via "Failed to compile depended scripts".
+  # Those errors alone are not a failure:
+  # syntax errors come from the parser before analysis and still fail here, and
+  # the import pass and the test run both load the project with its autoloads.
+  autoload_re=$(awk '
+    /^\[autoload\]/ { sec=1; next }
+    /^\[/           { sec=0 }
+    sec && /^[A-Za-z_][A-Za-z0-9_]*=/ { sub(/=.*/, ""); printf "%s%s", sep, $0; sep="|" }
+  ' "$PROJECT/project.godot" 2>/dev/null)
+
   parse_failed=0
   gd_count=0
   while IFS= read -r gd; do
@@ -211,6 +224,18 @@ if [ "$NO_ENGINE" -eq 0 ]; then
     rel=${gd#"$PROJECT/"}
     out=$("$GODOT" --headless --path "$PROJECT" --check-only --script "res://$rel" 2>&1)
     status=$?
+    if [ -n "$autoload_re" ] \
+       && printf '%s\n' "$out" | grep -Eq "Identifier not found: ($autoload_re)\b"; then
+      rest=$(printf '%s\n' "$out" \
+        | grep -Ev "Identifier not found: ($autoload_re)\b" \
+        | grep -Fv "Failed to compile depended scripts." \
+        | grep -Fv "Failed to load script \"res://$rel\" with error \"Compilation failed\"")
+      if ! printf '%s' "$rest" | grep -Eq 'Parse Error|SCRIPT ERROR|Compile Error'; then
+        continue
+      fi
+      out=$rest
+      status=1
+    fi
     if [ $status -ne 0 ] || printf '%s' "$out" | grep -Eq 'Parse Error|SCRIPT ERROR'; then
       sc_fail "$rel"
       printf '%s\n' "$out" | grep -E 'Parse Error|SCRIPT ERROR|error' | head -5 | sed 's/^/        /'

@@ -67,6 +67,13 @@ scripts/new-project.sh <name>
 Scaffolds `game-<name>` from `templates/`, wires its `CLAUDE.md` to studio-core, and drops in
 the four state files ready to fill.
 
+The scaffold is **local and offline**. `git init` runs — local history is a hard dependency of
+the harness, not a hosting choice, since the builder stamps `base_sha` from HEAD, the reviewer
+diffs `base_sha..HEAD`, `session-report.sh` reads the log, and `git revert` is the only undo for
+a bad packet. But no remote is added and nothing is pushed. CI is the separable part and is
+therefore **opt-in**: pass `--github` to write `.github/workflows/verify.yml`, once there is a
+host to run it. `--no-git` skips git entirely and gives up the four things above.
+
 Then, in the new repo:
 
 1. `/design-game` — design the game with the agent as a partner, not a scribe. It interviews
@@ -139,9 +146,11 @@ exits 0** — §3 is written with a human during design, and a hard gate there w
 phrasing rather than substance. The fix is always the same: put the number in the config and
 have the plan point at it.
 
-CI runs the same script on push and PR via `.github/workflows/verify.yml`, on the free tier.
-That is the primary verification path and it consumes no Claude quota — prefer it to asking an
-agent whether something works.
+In this repo, CI runs the same script on push and PR via `.github/workflows/verify.yml`, on the
+free tier. Where it is running it is the primary verification path and it consumes no Claude
+quota — prefer it to asking an agent whether something works. A game repo only has it if it was
+scaffolded with `--github`; otherwise the local `verify.sh` and the pre-commit hook are the
+whole gate, which is the same script either way.
 
 ## Guards — the rules as hooks
 

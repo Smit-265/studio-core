@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
 # new-project.sh - scaffold a game repo from templates/, wired to studio-core.
 #
-#     new-project.sh <name> [--parent DIR] [--no-git] [--force]
+#     new-project.sh <name> [--parent DIR] [--no-git] [--github] [--force]
 #
 #       <name>        lowercase, digits and dashes. Produces game-<name>/
 #       --parent DIR  where to create it. Default: studio-core's parent, so the
 #                     ../studio-core sibling convention works with no setup.
 #       --no-git      skip git init and the initial commit
+#       --github      also write .github/workflows/verify.yml. Off by default:
+#                     a scaffold assumes nothing about hosting. See below.
 #       --force       write into an existing empty directory
 #
 # One command produces a repo that verify.sh passes: state files, config,
 # an empty Godot project, and a CLAUDE.md that points back here.
+#
+# The repo is local. `git init` writes .git/ on this disk and nothing else -
+# no remote is added, nothing is pushed, no network is touched. Local history
+# is a hard dependency of the harness, not a hosting choice: the builder stamps
+# base_sha from HEAD, the reviewer diffs base_sha..HEAD, session-report.sh
+# reads the log, and `git revert` is the only undo for a bad packet. --no-git
+# gives up all four. CI is the separable part, so it is opt-in via --github.
 #
 # Exit: 0 created | 2 refused.
 
@@ -23,21 +32,23 @@ SELF_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 NAME=""
 PARENT=""
 DO_GIT=1
+DO_GITHUB=0
 FORCE=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --parent) PARENT="${2:-}"; shift ;;
     --no-git) DO_GIT=0 ;;
+    --github) DO_GITHUB=1 ;;
     --force)  FORCE=1 ;;
-    -h|--help) sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) sc_die "unknown option $1 (see --help)" ;;
     *)  [ -n "$NAME" ] && sc_die "more than one name given"; NAME="$1" ;;
   esac
   shift
 done
 
-[ -n "$NAME" ] || sc_die "usage: new-project.sh <name> [--parent DIR] [--no-git] [--force]"
+[ -n "$NAME" ] || sc_die "usage: new-project.sh <name> [--parent DIR] [--no-git] [--github] [--force]"
 
 # Directory name becomes a git remote and a Godot project name; keep it boring.
 printf '%s' "$NAME" | grep -Eq '^[a-z0-9][a-z0-9-]*$' \
@@ -76,6 +87,7 @@ fi
 # The game's CI checks studio-core out by name, so derive owner/repo from this
 # checkout's origin. Left as a placeholder when there is no remote yet - a
 # workflow that names a repo nobody can resolve should say so, not guess.
+# Only consulted under --github; without it no workflow is written at all.
 SC_REPO=$(git -C "$STUDIO_CORE" remote get-url origin 2>/dev/null \
   | sed -e 's|^git@[^:]*:||' -e 's|^https\{0,1\}://[^/]*/||' -e 's|\.git$||')
 [ -n "$SC_REPO" ] || SC_REPO="<owner>/studio-core"
@@ -91,7 +103,7 @@ fill() {
 sc_section "scaffolding game-$NAME"
 
 mkdir -p "$TARGET/assets" "$TARGET/config" "$TARGET/scenes" "$TARGET/scripts" "$TARGET/tests" \
-  "$TARGET/tuning" "$TARGET/.github/workflows" || sc_die "could not create $TARGET"
+  "$TARGET/tuning" || sc_die "could not create $TARGET"
 
 fill "$TEMPLATES/game-CLAUDE.md"  "$TARGET/CLAUDE.md"
 fill "$TEMPLATES/GAME_PLAN.md"    "$TARGET/GAME_PLAN.md"
@@ -99,11 +111,21 @@ fill "$TEMPLATES/PROGRESS.md"     "$TARGET/PROGRESS.md"
 fill "$TEMPLATES/DECISIONS.md"    "$TARGET/DECISIONS.md"
 fill "$TEMPLATES/assets.yaml"     "$TARGET/assets.yaml"
 fill "$TEMPLATES/budgets.yaml"    "$TARGET/config/budgets.yaml"
-fill "$TEMPLATES/game-verify.yml"  "$TARGET/.github/workflows/verify.yml"
-sc_ok "state files, CLAUDE.md, config/budgets.yaml, CI workflow"
-if [ "$SC_REPO" = "<owner>/studio-core" ]; then
-  sc_warn "studio-core has no origin remote - .github/workflows/verify.yml names"
-  sc_info "<owner>/studio-core as a placeholder. Fill it in before pushing."
+sc_ok "state files, CLAUDE.md, config/budgets.yaml"
+
+# CI is opt-in. A workflow file names a host, a remote and an owner; a scaffold
+# knows none of those, and a dormant .github/ in a repo that will never be
+# pushed is noise. --github writes it once the human has decided to host.
+if [ "$DO_GITHUB" -eq 1 ]; then
+  mkdir -p "$TARGET/.github/workflows" || sc_die "could not create $TARGET/.github/workflows"
+  fill "$TEMPLATES/game-verify.yml" "$TARGET/.github/workflows/verify.yml"
+  sc_ok ".github/workflows/verify.yml"
+  if [ "$SC_REPO" = "<owner>/studio-core" ]; then
+    sc_warn "studio-core has no origin remote - .github/workflows/verify.yml names"
+    sc_info "<owner>/studio-core as a placeholder. Fill it in before pushing."
+  fi
+else
+  sc_info "no CI workflow (--github adds .github/workflows/verify.yml)"
 fi
 
 # Keep otherwise-empty scaffold directories in git.
@@ -259,6 +281,10 @@ cat <<EOF
 
   DECISIONS.md already carries D-001 to D-005. Add approved tools and asset
   sources there before the asset-pipeline needs them.
+
+  This repo is local only. No remote, nothing pushed, no CI. To host it later:
+  add a remote yourself, and re-run with --github, or copy
+  $STUDIO_CORE/templates/game-verify.yml to .github/workflows/verify.yml.
 
   studio-core resolves as $SC_PATH_NOTE from this repo.
 EOF
